@@ -1,7 +1,12 @@
 <resources>
+
     <string name="service_description">Service for TCP/IP communication in FriendLocator</string>
     <string name="app_name">FriendLocator</string>
     <string name="title_activity_maps">Map</string>
+
+
+    <string name="default_username">Anonymous</string>
+    <string name="username">Anonymous</string>
 
 
     <string name="tab_map">Map</string>
@@ -16,4 +21,13 @@
 
     <string name="groups_toggle_on_map">On Map</string>
     <string name="groups_toggle_off_map">Off Map</string>
+
+    <string name="add_new_group">Enter new group name:</string>
+    <string name="add_new_group_done">Add group</string>
+
+    <string name="change_name_text">You can change your name here</string>
+    <string name="change_name_done">Change name</string>
+
+    <string name="chat_current_group">CURRENT_GROUP</string>
+    <string name="chat_current_id">CURRENT_ID</string>
 </resources>

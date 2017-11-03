@@ -10,6 +10,7 @@ import com.squareup.leakcanary.LeakCanary;
 
 public class FriendLocatorApplication extends Application {
 
+
     @Override public void onCreate() {
         super.onCreate();
         if (LeakCanary.isInAnalyzerProcess(this)) {

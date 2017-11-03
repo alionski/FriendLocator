@@ -2,7 +2,10 @@ package layout;
 
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.media.MediaCodec;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
@@ -19,32 +22,40 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.MapsInitializer;
 import com.google.android.gms.maps.OnMapReadyCallback;
-import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import aliona.mah.se.friendlocator.R;
+import aliona.mah.se.friendlocator.util.MapFragmentCallback;
+import beans.Group;
+import beans.Member;
 
 /**
  * A simple {@link Fragment} subclass.
  */
-public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleMap.OnInfoWindowClickListener {
+public class MapFragment extends Fragment implements OnMapReadyCallback,
+        GoogleMap.OnInfoWindowClickListener {
+    private final static String TAG = MapFragment.class.getName();
     private final int MY_PERMISSIONS_REQUEST_GPS = 5555;
     private boolean mPermissionGranted = false;
     private MapView mMapView;
     private GoogleMap mMap;
+    private Group[] groups;
+    private LatLng mMyPositon;
+    private MapFragmentCallback callback;
 
 
     public MapFragment() {
         // Required empty public constructor
     }
 
-
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
+
+        Log.d(TAG, "ON CREATE VIEW");
 
         View view = inflater.inflate(R.layout.fragment_map, container, false);
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
@@ -63,6 +74,21 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
         return view;
     }
 
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof MapFragmentCallback) {
+            callback = (MapFragmentCallback) context;
+        }
+    }
+
+    @Override
+    public void onResume() {
+        Log.d(TAG, "ON RESUME");
+        super.onResume();
+        mMapView.onResume();
+    }
+
     /**
      * Manipulates the map once available.
      * This callback is triggered when the map is ready to be used.
@@ -75,13 +101,15 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        Log.i(TAG, "MAP IS READY");
 
-        addMarkers();
         addSelf();
+
+        Log.i(TAG, "ABOUT TO ADD MARKERS");
+        addMarkers();
 
         mMap.setInfoWindowAdapter( new InfoAdapter());
         mMap.setOnInfoWindowClickListener(this);
-
     }
 
     private void addSelf() {
@@ -100,16 +128,54 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     }
 
     private void addMarkers() {
-        // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(-34, 151);
-        mMap.addMarker(new MarkerOptions().position(sydney)
-                .title("Marker in Sydney")
-                .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
-                .snippet("Population: 4,137,400"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+
+        mMap.clear();
+
+        mMyPositon = callback.requestLocationUpdate();
+        Log.d(TAG, mMyPositon.toString());
+        groups = callback.requestGroupsUpdate();
+
+        Log.d(TAG, "ADDING MARKERS " + mMyPositon.toString());
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(mMyPositon));
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setCompassEnabled(true);
         mMap.animateCamera(CameraUpdateFactory.zoomTo(8.0f)); // should be between min = 2.0 and max = 21.0
+
+        Log.d(TAG, "REACHED NULL CHECK NULL");
+        if (groups == null || groups.length == 0) {
+            Log.d(TAG, "GROUPS ARE NULL");
+            return;
+        }
+
+        for (Group group : groups) {
+            if (group.isOnMap()) {
+                Log.d(TAG, "LOOPING THROUGH FIRST JOINED GROUP, SIZE" + group.getMembers());
+                for (Member member : group.getMembers()) {
+                    Log.d(TAG, "ADDING TO MAP");
+                    Log.d(TAG, member.getMemberName() + " " + member.getLongitude());
+                    double longitude, latitude;
+                    try {
+                        longitude = Double.parseDouble(member.getLongitude());
+                        latitude = Double.parseDouble(member.getLatitude());
+                    } catch (NumberFormatException locationNonAvailable) {
+                        continue;
+                    }
+
+                    LatLng memberPosition = new LatLng(latitude, longitude);
+
+                    Marker marker = mMap.addMarker( new MarkerOptions()
+                            .position(memberPosition)
+                            .title(member.getMemberName())
+                            .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
+                            .snippet("Group:" + group.getGroupName())
+                    );
+
+                    Log.d(TAG, "ADD TO MAP SUCCESS");
+                    marker.showInfoWindow();
+                }
+            }
+        }
+
     }
 
     @Override
@@ -167,21 +233,22 @@ public class MapFragment extends Fragment implements OnMapReadyCallback, GoogleM
     }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        mMapView.onResume();
-    }
-
-    @Override
     public void onPause() {
+        Log.d(TAG, "ON PAUSE");
         super.onPause();
+        if (mMap != null) {
+            mMap.clear();
+        }
         mMapView.onPause();
     }
 
     @Override
     public void onDestroy() {
+        Log.d(TAG, "ON DESTROY");
         super.onDestroy();
-        mMapView.onDestroy();
+        if (mMapView != null) {
+            mMapView.onDestroy();
+        }
     }
 
     @Override

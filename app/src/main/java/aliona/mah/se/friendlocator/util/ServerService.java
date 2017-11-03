@@ -5,15 +5,18 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
+import android.os.Parcelable;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.JsonWriter;
 import android.util.Log;
 
@@ -21,34 +24,31 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.StringWriter;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedList;
 
+import beans.Group;
 import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.R;
+import beans.ImageMessage;
+import beans.MemberLocation;
+import beans.TextMessage;
 
 /**
  * Created by aliona on 2017-10-22.
  */
 
-public class IncomingMessageService extends Service {
-    public static final String JSON_TYPE = "type";
+public class ServerService extends Service {
+    public static final String TAG = ServerService.class.getName();
 
-    public static final String REPLY_REGISTER = "register";
-    public static final String REPLY_UNREGISTER = "unregister";
-    public static final String REPLY_MEMBERS = "members";
-    public static final String REPLY_GROUPS = "groups";
-    public static final String REPLY_LOCATION = "location";
-    public static final String UPDATE_LOCATIONS = "locations";
-    public static final String UPDATE_EXCEPTION = "exception";
-    public static final String REPLY_IMAGECHAT = "imagechat";
-    public static final String UPDATE_TEXTCHAT = "textchat";
-    public static final String REPLY_UPLOAD = "upload";
+    public static final String JSON_TYPE = "type";
 
     private Socket mSocket;
     public final static String IP = "ip";
@@ -60,12 +60,10 @@ public class IncomingMessageService extends Service {
 
     public static final int mNotificationId = 888888;
     public static final String CHANNEL_ID = "friend_locator_incoming_message";
-    private boolean serviceRunning;
 
     @Override
     public void onCreate() {
         super.onCreate();
-        serviceRunning = true;
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -76,7 +74,7 @@ public class IncomingMessageService extends Service {
 
             mMainThread = new MainThread(serverIp, serverPort);
             mMainThread.start();
-//            mMainLoopHandler = new Handler(mMainThread.getLooper());
+            mMainLoopHandler = new Handler(mMainThread.getLooper());
             // TODO: send messages via handler
         }
         return Service.START_STICKY;
@@ -90,8 +88,8 @@ public class IncomingMessageService extends Service {
 
 
     public class LocalService extends Binder { // Binder implementerar IBinder
-        public IncomingMessageService getService() {
-            return IncomingMessageService.this; // referens till Service-klassen
+        public ServerService getService() {
+            return ServerService.this; // referens till Service-klassen
         }
     }
 
@@ -115,7 +113,7 @@ public class IncomingMessageService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
-    public void requestUnregister(String groupName, String myId) {
+    public void requestUnregister(String myId) {
         Log.i("TO HANDLE", "requestUnregister()" );
         StringWriter writer = new StringWriter();
         JsonWriter jWriter = new JsonWriter(writer);
@@ -170,6 +168,7 @@ public class IncomingMessageService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
+    // TODO: diffeent ids for different goups!
     public void sendPosition(String myId, String longitude, String latitude) {
         Log.i("TO HANDLE", "sendPosition(()" );
         StringWriter writer = new StringWriter();
@@ -209,26 +208,26 @@ public class IncomingMessageService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
-    public void sendPictureMessage(String userId, String text, String longitude, String latitude) {
-        // TODO: will then respond with port where to save img so add String bitmap to a queue in service
+    public void sendPictureMessage(ImageMessage msg) {
+
         StringWriter writer = new StringWriter();
         JsonWriter jWriter = new JsonWriter(writer);
         String result;
         try {
             jWriter.beginObject()
                     .name("type").value("imagechat")
-                    .name("id").value(userId)
-                    .name("text").value(text)
-                    .name("longitude").value(longitude)
-                    .name("latitude").value(latitude)
+                    .name("id").value(msg.getFrom())
+                    .name("text").value(msg.getText())
+                    .name("longitude").value(msg.getLongitude())
+                    .name("latitude").value(msg.getLatitude())
                     .endObject();
         } catch (IOException e) {
             e.printStackTrace();
         }
         result = writer.toString();
-        Message msg = new Message();
-        msg.obj = result;
-        mMainLoopHandler.sendMessage(msg);
+        Message mess = new Message();
+        mess.obj = result;
+        mMainLoopHandler.sendMessage(mess);
 
     }
 
@@ -269,8 +268,10 @@ public class IncomingMessageService extends Service {
                     String toSend = (String) msg.obj;
                     Log.i("HANDLER", ": message received");
                     try {
-                        outputStream.writeUTF(toSend);
-                        outputStream.flush();
+                        if (outputStream != null) {
+                            outputStream.writeUTF(toSend);
+                            outputStream.flush();
+                        }
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -283,9 +284,12 @@ public class IncomingMessageService extends Service {
     private class ReceiverThread extends Thread {
         Socket socket;
         DataInputStream inputStream;
+        LocalBroadcastManager broadcaster;
 
         public ReceiverThread(Socket socket) {
+
             this.socket = socket;
+            broadcaster = LocalBroadcastManager.getInstance(getApplicationContext());
         }
 
         @Override
@@ -297,7 +301,6 @@ public class IncomingMessageService extends Service {
                 e.printStackTrace();
             }
             while (socket.isConnected()) {
-//                Log.i("RECEIVER THREAD", " IS RUNNING");
                 try {
                     String received = inputStream.readUTF();
                     Log.i("READ UTF: ", "SOMETHING RECEIVED");
@@ -308,17 +311,32 @@ public class IncomingMessageService extends Service {
                     Log.i("IncomingMessage TYPE", type);
 
                     switch (type) {
-                        case REPLY_REGISTER:
-                            // TODO: first register -- this is the reply after registration
+                        case Config.REPLY_REGISTER:
+
                             String groupName = json.getString("group");
                             String memberIdInGroup = json.getString("id"); // your id in the group you just registered
                             Log.i("REPLY REGISTER", groupName + " " + memberIdInGroup);
+
+                            Intent intentRegister = new Intent(ServerService.TAG);
+                            intentRegister.setAction(Config.REPLY_REGISTER);
+                            intentRegister.putExtra(Config.GROUP, groupName);
+                            intentRegister.putExtra(Config.ID, memberIdInGroup);
+                            broadcaster.sendBroadcast(intentRegister);
+
                             break;
-                        case REPLY_UNREGISTER:
-                            // TODO: first unregister, the reply is the same form as request
+                        case Config.REPLY_UNREGISTER:
+
                             String unregisterId = json.getString("id");
+
+                            Intent intentUnreg = new Intent(ServerService.TAG);
+                            intentUnreg.setAction(Config.REPLY_UNREGISTER);
+                            intentUnreg.putExtra(Config.ID, unregisterId);
+                            broadcaster.sendBroadcast(intentUnreg );
+
+                            Log.i(Config.REPLY_REGISTER, "SUCCESSFULLY UNREGISTERED");
+
                             break;
-                        case REPLY_MEMBERS:
+                        case Config.REPLY_MEMBERS:
                             // list of all members registered in the given group
                             // TODO: first sent a question
                             String groupNameMembers = json.getString("group");
@@ -330,71 +348,131 @@ public class IncomingMessageService extends Service {
                                 String memberName = member.getString("member");
                                 memberNameList.add(memberName);
                             }
+
+                            Intent intentMembers = new Intent(ServerService.TAG);
+                            intentMembers.setAction(Config.REPLY_MEMBERS);
+                            intentMembers.putExtra(Config.GROUP, groupNameMembers);
+                            intentMembers.putStringArrayListExtra(Config.MEMBERS_ARRAY, memberNameList);
+                            broadcaster.sendBroadcast(intentMembers);
+
+                            Log.i(Config.REPLY_REGISTER, "RECEIVED MEMBER LIST FOR GROUP " + groupNameMembers);
+
                             break;
-                        case REPLY_GROUPS:
+
+                        case Config.REPLY_GROUPS:
                             // list of all groups registered on the server right now
                             // TODO: first sent a question
                             JSONArray groupsArray = json.getJSONArray("groups");
-                            JSONObject group;
-                            ArrayList<String> groupNameList = new ArrayList<>();
-                            for (int i=0; i<groupsArray.length(); i++) {
-                                group = groupsArray.getJSONObject(i);
-                                String groupNameGroups = group.getString("group");
-                                groupNameList.add(groupNameGroups);
-                            }
-                            Log.i("GROUPS REPLY: ", groupNameList.toString());
-                            break;
-                        case REPLY_LOCATION:
-                            // TODO: first send an update with the same form
-                            String idInGroup = json.getString("id");
-                            String longitude = json.getString("longitude");
-                            String latitude = json.getString("latitude");
+                            JSONObject groupJson;
 
+                            Log.i(TAG, "JSON GROUPS" + groupsArray.toString());
+
+                            ArrayList<Group> groups = new ArrayList<>();
+                            for (int i=0; i<groupsArray.length(); i++) {
+                                groupJson = groupsArray.getJSONObject(i);
+                                String groupNameGroups = groupJson.getString(Config.GROUP);
+                                Group group = new Group(groupNameGroups);
+                                groups.add(group);
+                            }
+
+                            Intent intentGroupsList = new Intent(ServerService.TAG);
+                            intentGroupsList.setAction(Config.REPLY_GROUPS);
+                            intentGroupsList.putParcelableArrayListExtra(Config.GROUPS_ARRAY, groups);
+                            broadcaster.sendBroadcast(intentGroupsList);
+
+                            Log.i("GROUPS REPLY: ", groups.toString());
                             break;
-                        case UPDATE_LOCATIONS:
-                            // TODO: unclear; the server just sends it after what request?..
+
+                        case Config.UPDATE_LOCATIONS:
+
                             String groupNameLocations = json.getString("group");
                             JSONArray locationsArray = json.getJSONArray("location");
                             JSONObject memberLocation;
-                            HashMap<String, String[]> memberLocationLatLong = new HashMap<>();
+                            ArrayList<MemberLocation> memberLocations = new ArrayList<>();
                             for (int i = 0; i < locationsArray.length(); i++) {
                                 memberLocation = locationsArray.getJSONObject(i);
-                                String[] latlong = new String[2];
-                                latlong[0] = memberLocation.getString("longitude");
-                                latlong[1] = memberLocation.getString("latitude");
-                                memberLocationLatLong.put(memberLocation.getString("member"), latlong);
+                                MemberLocation loc = new MemberLocation(
+                                        memberLocation.getString(Config.MEMBER),
+                                        memberLocation.getString(Config.LONG),
+                                        memberLocation.getString(Config.LAT)
+                                );
+                                memberLocations.add(loc);
                             }
+
+                            Intent intentLocationsUpdate = new Intent(ServerService.TAG);
+                            intentLocationsUpdate.setAction(Config.UPDATE_LOCATIONS);
+                            intentLocationsUpdate.putExtra(Config.GROUP, groupNameLocations);
+                            intentLocationsUpdate.putParcelableArrayListExtra(Config.GROUP_LOCATIONS, memberLocations);
+                            broadcaster.sendBroadcast(intentLocationsUpdate);
+
                             break;
-                        case UPDATE_EXCEPTION:
+                        case Config.UPDATE_EXCEPTION:
                             String exception = json.getString("message");
+
+                            Intent intentError = new Intent(ServerService.TAG);
+                            intentError.setAction(Config.UPDATE_EXCEPTION);
+                            intentError.putExtra(Config.EXCEPTION_MSG, exception);
+                            broadcaster.sendBroadcast(intentError);
+
                             Log.i("SERVICE-SERVER ERROR: ", exception);
+
                             break;
-                        case UPDATE_TEXTCHAT:
-                            // TODO: are the answers the same if I send a text chat?
-                            String memberId = json.getString("id");
-                            String messageText = json.getString("text");
+                        case Config.UPDATE_TEXTCHAT:
+
+                            String memberGroup = json.getString(Config.GROUP);
+                            String memberName = json.getString(Config.MEMBER);
+
+                            if (memberGroup == null || memberName == null) {
+                                // means it's my own message that I just sent and Idon't need to deal with at all
+                                // I will receive it as a message to the chat anyway
+                                break;
+                            }
+
+                            String messageText = json.getString(Config.TEXT);
+
+                            Intent intentNewMessage = new Intent(ServerService.TAG);
+                            intentNewMessage.setAction(Config.UPDATE_TEXTCHAT);
+                            intentNewMessage.putExtra(Config.TEXT_OBJ,
+                                    new TextMessage(memberGroup, memberName, messageText));
+                            broadcaster.sendBroadcast(intentNewMessage);
+
+//                            notifyNewMessage(memberGroup + ":" + memberName, messageText);
+
                             break;
-                        case REPLY_IMAGECHAT:
-                            // TODO: get the img in an asynk task and show to user
-                            String imgChatGroup = json.getString("group");
-                            String imgChatFrom = json.getString("member");
-                            String imgChatText = json.getString("text");
-                            String imgLong = json.getString("longitude");
-                            String imgLat = json.getString("latitude");
-                            String imgId = json.getString("imageid");
-                            String imgPort = json.getString("port");
+
+                        case Config.UPDATE_IMAGECHAT:
+
+                            ImageMessage imgMsg = new ImageMessage();
+                            imgMsg.setGroup(json.getString("group"));
+                            imgMsg.setFrom(json.getString("member"));
+                            imgMsg.setText(json.getString("text"));
+                            imgMsg.setLongitude(json.getString("longitude"));
+                            imgMsg.setLatitude(json.getString("latitude"));
+
+                            Intent imageChat = new Intent(ServerService.TAG);
+                            imageChat.setAction(Config.UPDATE_IMAGECHAT);
+                            imageChat.putExtra(Config.IMG_OBJECT, imgMsg);
+                            imageChat.putExtra(Config.IMG_ID, json.getString("imageid"));
+                            imageChat.putExtra(Config.IMG_PORT, json.getString("port"));
+                            broadcaster.sendBroadcast(imageChat);
+
                             break;
-                        case REPLY_UPLOAD:
+
+                        case Config.REPLY_UPLOAD:
                             String imageId = json.getString("imageid");
                             String port = json.getString("port");
-                            // TODO: start new asynctask where you upload a pic to server knowing the port
+
+                            Intent upload = new Intent(ServerService.TAG);
+                            upload.setAction(Config.REPLY_UPLOAD);
+                            upload.putExtra(Config.IMG_ID, imageId);
+                            upload.putExtra(Config.IMG_PORT, port);
+                            broadcaster.sendBroadcast(upload);
+
                             break;
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
                     Log.i("INPUT STREAM PROBLEM: ", e.toString());
-//                } catch (IOException e) {
-////                    e.printStackTrace();
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -442,8 +520,7 @@ public class IncomingMessageService extends Service {
     public void onDestroy() {
 //        The system invokes this method when the service is no longer used and is being destroyed. Your service should implement
 //        this to clean up any resources such as threads, registered listeners, or receivers. This is the last call that the service
-//        receives.
-        serviceRunning = false;
+//        receives.;
         // TODO: fix closing sockets,, this one is null
         if (mSocket != null) {
             try {
