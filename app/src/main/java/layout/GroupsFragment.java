@@ -1,11 +1,10 @@
 package layout;
 
-
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
-import android.os.Parcelable;
 import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -18,28 +17,29 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.ToggleButton;
+import java.util.ArrayList;
+import java.util.HashMap;
 
-import aliona.mah.se.friendlocator.util.GroupsFragmentCallback;
-import aliona.mah.se.friendlocator.util.OnFragmentVisibleListener;
-import beans.Group;
+import aliona.mah.se.friendlocator.beans.Member;
+import aliona.mah.se.friendlocator.interfaces.GroupsFragmentCallback;
+import aliona.mah.se.friendlocator.beans.Group;
 import aliona.mah.se.friendlocator.R;
-import aliona.mah.se.friendlocator.util.Config;
 
 /**
  * A simple {@link Fragment} subclass.
  */
-public class GroupsFragment extends Fragment implements View.OnClickListener, OnFragmentVisibleListener{
+public class GroupsFragment extends Fragment implements View.OnClickListener {
     public static final String TAG = GroupsFragment.class.getName();
     private ListView mListView;
+    private ArrayAdapter mGroupsAdapter;
     private FloatingActionButton mButtonNewGroup;
 
-    private GroupsFragmentCallback callback;
-    private Group[] groups;
-
-
+    private GroupsFragmentCallback mParent;
+//    private ArrayList<Group> mGroups = new ArrayList<>();
 
     public GroupsFragment() {
         // Required empty public constructor
@@ -60,37 +60,29 @@ public class GroupsFragment extends Fragment implements View.OnClickListener, On
 
     @Override
     public void onAttach(Context context) {
+        Log.d(TAG, "ON ATTACH");
         super.onAttach(context);
         if (context instanceof GroupsFragmentCallback) {
-            callback = (GroupsFragmentCallback) context;
+            mParent = (GroupsFragmentCallback) context;
         }
     }
 
     @Override
     public void onResume() {
-        super.onResume();
         Log.d(TAG, "ON RESUME");
+        updateGroupsList();
+        super.onResume();
     }
 
+    public void updateGroupsList() {
 
-    @Override
-    public void fragmentBecameVisible() {
-        Log.d(TAG, "FRAGMENT VISIBLE");
-        groups = callback.requestUpdateGroups();
-        mListView.setAdapter(null);
+        ArrayList<Group> updatedGroups = mParent.requestUpdateGroups();
+        HashMap<String, ArrayList<Member>> members = mParent.getMembers();
+
         mListView.invalidateViews();
-        if (groups != null) {
-            mListView.setAdapter( new GroupsAdapter(getContext(), R.layout.list_view_item_groups, groups));
-        }
-
-    }
-
-    public void updateGroupsList(Group[] groups) {
-        this.groups = groups;
-        Log.d(TAG, String.valueOf(groups.length));
         mListView.setAdapter(null);
-        mListView.invalidateViews();
-        mListView.setAdapter( new GroupsAdapter(getContext(), R.layout.list_view_item_groups, groups));
+        mGroupsAdapter = new GroupsAdapter(getContext(), R.layout.list_view_item_groups, updatedGroups, members);
+        mListView.setAdapter(mGroupsAdapter);
     }
 
     @Override
@@ -102,86 +94,101 @@ public class GroupsFragment extends Fragment implements View.OnClickListener, On
 
     private class GroupsAdapter extends ArrayAdapter<Group> {
         private final String TAG = GroupsAdapter.class.getName();
+        HashMap<String, ArrayList<Member>> members;
 
-        public GroupsAdapter(Context context, int resource, Group[] items) {
+        public GroupsAdapter(Context context, int resource, ArrayList<Group> items,
+                             HashMap<String, ArrayList<Member>> members) {
             super(context, resource, items);
+            this.members = members;
             Log.d(TAG, "ON CREATE GROUPS ADAPTER");
         }
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            View v = convertView;
 
-            if (v == null) {
+            if (convertView == null) {
                 LayoutInflater vi;
                 vi = LayoutInflater.from(getContext());
-                v = vi.inflate(R.layout.list_view_item_groups, null);
+                convertView = vi.inflate(R.layout.list_view_item_groups, null);
             }
 
             Group group = getItem(position);
+            Log.d(TAG, "LOADING GROUP INFO: \n" + group.getGroupName() + "\n" + group.getMyGroupId() + "\n");
 
-            if (group != null) {
-                boolean onMap = group.isOnMap();
-                boolean joined = group.isJoined();
 
-                TextView groupName = v.findViewById(R.id.groups_text_view_group_name);
-                final Button buttonJoin = v.findViewById(R.id.groups_join_button);
-                final ToggleButton toggleOnMap = v.findViewById(R.id.groups_toggle_on_map);
+            convertView.setTag(position);
+            boolean joined = group.getMyGroupId() != null;
 
-                groupName.setText(group.getGroupName());
+            TextView groupName = convertView.findViewById(R.id.groups_text_view_group_name);
+            Button buttonJoin = convertView.findViewById(R.id.groups_join_button);
 
-                if (joined) {
-                    buttonJoin.setText(getResources().getString(R.string.groups_button_leave));
-                    buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimaryDark));
-                    toggleOnMap.setEnabled(true);
-                    toggleOnMap.setChecked(onMap);
-                } else {
-                    buttonJoin.setText(getResources().getString(R.string.groups_button_join));
-                    buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
-                    toggleOnMap.setChecked(onMap);
-                    toggleOnMap.setEnabled(false);
+            buttonJoin.setTag(position);
+            buttonJoin.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+                    int pos = (Integer) view.getTag();
+                    mParent.notifyJoinedStatusChanged(getItem(pos).getGroupName(),
+                            getItem(pos).getMyGroupId() == null);
                 }
+            });
 
-                buttonJoin.setTag(position);
-                buttonJoin.setOnClickListener(new View.OnClickListener() {
+            groupName.setText(group.getGroupName());
+
+            if (joined) {
+                buttonJoin.setText(getResources().getString(R.string.groups_button_leave));
+                buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
+                convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPaleOrange));
+            } else {
+                buttonJoin.setText(getResources().getString(R.string.groups_button_join));
+                buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimaryDark));
+                convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimary));
+            }
+
+            if (joined) {
+                convertView.findViewById(R.id.joined_group_options).setVisibility(View.VISIBLE);
+                ImageButton buttonChat = convertView.findViewById(R.id.button_start_chat);
+                buttonChat.setTag(position);
+
+                buttonChat.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View view) {
                         int pos = (Integer) view.getTag();
-                        Group group = getItem(pos);
-                        group.setJoined(!group.isJoined());
-                        if (group.isJoined()) {
-                            buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimaryDark));
-                            buttonJoin.setText(R.string.groups_button_leave);
-                            toggleOnMap.setEnabled(true);
-                        } else {
-                            buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
-                            buttonJoin.setText(R.string.groups_button_join);
-                            toggleOnMap.setEnabled(false);
-                        }
-
-                        callback.notifyJoinedStatusChanged(group.getGroupName(), group.isJoined());
+                        mParent.showChat(getItem(pos).getGroupName());
                     }
                 });
 
-                toggleOnMap.setTag(position);
-                toggleOnMap.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                ImageButton buttonMap = convertView.findViewById(R.id.button_see_on_map);
+                buttonMap.setTag(position);
+
+                buttonMap.setOnClickListener(new View.OnClickListener() {
                     @Override
-                    public void onCheckedChanged(CompoundButton compoundButton, boolean isOnMap) {
-                        int pos = (Integer) compoundButton.getTag();
-                        Group group = getItem(pos);
-                        group.setOnMap(isOnMap);
-
-                        if (isOnMap) {
-                            compoundButton.setChecked(true);
-                        } else {
-                            compoundButton.setChecked(false);
-                        }
-
-                        callback.notifyMapVisibilityChanged(group.getGroupName(), group.isOnMap());
+                    public void onClick(View view) {
+                        int pos = (Integer) view.getTag();
+                        mParent.showMap(getItem(pos).getGroupName());
                     }
                 });
+
+            } else {
+                convertView.findViewById(R.id.joined_group_options).setVisibility(View.GONE);
             }
-            return v;
+
+            if (members.get(group.getGroupName()) != null) {
+                TextView memberView = convertView.findViewById(R.id.members_names);
+                StringBuilder builder = new StringBuilder();
+                ArrayList<Member> names = members.get(getItem(position).getGroupName());
+                builder.append(getResources().getString(R.string.group_members)).append(" ");
+                for (int i = 0; i < names.size(); i++) {
+                    Log.d(TAG, "GROUP MEMBER: " + names.get(i).getMemberName());
+                    builder.append(names.get(i).getMemberName());
+                    if (i == names.size()-1) {
+                        break;
+                    }
+                    builder.append(", ");
+                }
+                memberView.setText(builder.toString());
+            }
+
+            return convertView;
         }
     }
 
@@ -210,7 +217,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener, On
                             public void onClick(DialogInterface dialogInterface, int i) {
                                 String name = enterName.getText().toString();
                                 if (!name.equals("")) {
-                                    callback.startNewGroup(enterName.getText().toString());
+                                    mParent.startNewGroup(enterName.getText().toString());
                                 }
                                 dialogInterface.dismiss();
                             }
@@ -240,7 +247,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener, On
 
     @Override
     public void onLowMemory() {
+        Log.d(TAG, "ON LOW MEMORY");
         super.onLowMemory();
     }
-
 }

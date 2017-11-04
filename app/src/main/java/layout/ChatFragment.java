@@ -2,10 +2,10 @@ package layout;
 
 
 import android.content.Context;
-import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.support.annotation.NonNull;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
@@ -16,39 +16,32 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 
 import aliona.mah.se.friendlocator.R;
-import aliona.mah.se.friendlocator.util.ChatListCallback;
-import aliona.mah.se.friendlocator.util.OnFragmentVisibleListener;
-import beans.Group;
-import beans.ImageMessage;
-import beans.TextMessage;
+import aliona.mah.se.friendlocator.interfaces.ChatListCallback;
+import aliona.mah.se.friendlocator.beans.Group;
+import aliona.mah.se.friendlocator.beans.ImageMessage;
+import aliona.mah.se.friendlocator.beans.TextMessage;
 
 /**
  * A simple {@link Fragment} subclass.
  */
-public class ChatFragment extends Fragment implements OnFragmentVisibleListener, View.OnClickListener {
+public class ChatFragment extends Fragment implements View.OnClickListener {
     public static final String TAG = ChatFragment.class.getName();
 
     private static final String USERNAME = "username";
+    private static final String GROUP = "group";
 
-    private String mCurrentGroup;
-    private String mCurrentId;
+    private Group mGroup;
     private String mMyName;
-    private ChatListAdapter mGroupsAdapter;
     private BubblesAdapter mBubblesAdapter;
 
-    private ArrayList<Group> mJoinedGroups;
-
-    private ListView mGroupsList;
     private ListView mChatBubblesList;
-    private LinearLayout mChatBubbles;
-    private ChatListCallback callback;
+    private ChatListCallback mParent;
 
     private ArrayList<Parcelable> mReadMessages = new ArrayList<>();
 
@@ -60,10 +53,11 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
 
     public ChatFragment() {  }
 
-    public static ChatFragment newInstance(String username) {
+    public static ChatFragment newInstance(String username, Group group) {
         ChatFragment frag = new ChatFragment();
         Bundle args = new Bundle();
         args.putString(USERNAME, username);
+        args.putParcelable(GROUP, group);
         frag.setArguments(args);
         return frag;
     }
@@ -74,6 +68,7 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
         Bundle args = getArguments();
         if (args != null) {
             mMyName = args.getString(USERNAME);
+            mGroup = args.getParcelable(GROUP);
         }
     }
 
@@ -81,34 +76,26 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         Log.d(TAG, "ON CREATE VIEW");
-
         View view = inflater.inflate(R.layout.fragment_chat, container, false);
-
         initialiseUI(view);
-        updateGroupsAdapter();
 
         return view;
     }
 
     @Override
     public void onAttach(Context context) {
+        Log.d(TAG, "ON ATTACH" );
         super.onAttach(context);
         if (context instanceof ChatListCallback) {
-            callback = (ChatListCallback) context;
+            mParent = (ChatListCallback) context;
         } else {
             throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
+                    + " must implement ChatListCallback");
         }
     }
 
     private void initialiseUI(View view) {
-
-        mGroupsList = view.findViewById(R.id.list_available_joined_groups);
-        mChatBubbles = view.findViewById(R.id.view_with_chat_bubbles);
         mChatBubblesList = view.findViewById(R.id.list_view_chat_bubbles);
-
-        mGroupsList.setVisibility(View.VISIBLE);
-        mChatBubbles.setVisibility(View.GONE);
 
         mEnterTextField = view.findViewById(R.id.et_enter_chat_text);
 
@@ -121,135 +108,24 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
 
     @Override
     public void onResume() {
+        Log.d(TAG, "ON RESUME" );
         super.onResume();
-        Log.d(TAG, "GROUP NAMES ON RESUME CHAT" );
-    }
-
-    @Override
-    public void fragmentBecameVisible() {
-        Log.d(TAG, "FRAGMENT VISIBLE");
-        updateGroupsAdapter();
-    }
-
-    @Override
-    public void onClick(View view) {
-
-        if (view == mButtonAttachPic) {
-
-            callback.startImgUpload();
-            imgMessage = true;
-
-        } else if (view == mButtonSend) {
-            String text = mEnterTextField.getText().toString();
-            if (text.length() == 0) {
-                // TODO: show snack bar
-                return;
-            }
-
-            if (imgMessage) {
-                if (callback.imgIsReady()) {
-                    callback.onSendImageMessage(mCurrentId, text);
-                    imgMessage = false;
-                }
-            } else {
-                callback.onSendTextMessage(mCurrentId, text);
-
-            }
-
-            mEnterTextField.setText("");
-        }
-    }
-
-    public void goBackToChatList() {
-        mChatBubbles.setVisibility(View.GONE);
-        mGroupsList.setVisibility(View.VISIBLE);
-
-        mCurrentGroup = null;
-        mCurrentId = null;
-
-        updateGroupsAdapter();
-    }
-
-    private void showBubbles() {
-
-        mGroupsList.setVisibility(View.GONE);
-        mChatBubbles.setVisibility(View.VISIBLE);
-
         updateBubblesAdapter();
     }
 
-    public boolean bubblesVisible() {
-        return mChatBubbles.getVisibility() == View.VISIBLE;
-    }
-
-    public void updateGroupsAdapter() {
-        mJoinedGroups = callback.requestJoinedGroups();
-        mGroupsAdapter = new ChatListAdapter(getContext(), R.id.list_available_joined_groups, mJoinedGroups);
-//        mGroupsList.setAdapter(null);
-        mGroupsList.invalidateViews();
-        mGroupsList.setAdapter(mGroupsAdapter);
-    }
-
     public String getCurrentGroup() {
-        return mCurrentGroup;
+        return mGroup.getGroupName();
     }
 
     public void updateBubblesAdapter() {
-        mReadMessages = callback.requestReadMessages(mCurrentGroup);
+        ArrayList<Parcelable> updatedMessages = mParent.requestReadMessages(mGroup.getGroupName());
 
-        if (mReadMessages == null) {
+        if(updatedMessages != null && updatedMessages.size() != 0) {
             mChatBubblesList.setAdapter(null);
-            mChatBubblesList.invalidateViews();
-            Log.d(TAG, "MESSAGES ARE NULL");
-            return;
-        }
-
-        Log.d(TAG, "SIZE : " + mReadMessages.size() + "CURRENT GROUP " + mCurrentGroup);
-
-        mBubblesAdapter = new BubblesAdapter(getContext(), R.id.list_view_chat_bubbles, mReadMessages);
-        mChatBubblesList.invalidateViews();
-        mChatBubblesList.setAdapter(mBubblesAdapter);
-    }
-
-
-    private class ChatListAdapter extends ArrayAdapter<Group> {
-
-        public ChatListAdapter(@NonNull Context context, int resource, @NonNull ArrayList<Group> objects) {
-            super(context, resource, objects);
-        }
-
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-
-            Group group = getItem(position);
-
-            if (!group.isJoined()) {
-                return null;
-            }
-
-            if (convertView == null) {
-                LayoutInflater vi;
-                vi = LayoutInflater.from(getContext());
-                convertView = vi.inflate(R.layout.list_view_item_chat_list, null);
-            }
-
-            TextView groupNameTV = convertView.findViewById(R.id.chat_list_group_name);
-            groupNameTV.setText(group.getGroupName());
-
-            TextView unreadMsgNumber = convertView.findViewById(R.id.chat_list_unread_msgs_number);
-
-            convertView.setTag(R.string.chat_current_group, group.getGroupName());
-            convertView.setTag(R.string.chat_current_id, group.getMyGroupId());
-            convertView.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-                    mCurrentGroup = (String) view.getTag(R.string.chat_current_group);
-                    mCurrentId = (String) view.getTag(R.string.chat_current_id);
-                    showBubbles();
-                }
-            });
-
-            return convertView;
+            mBubblesAdapter = new BubblesAdapter(getContext(), R.id.list_view_chat_bubbles, updatedMessages);
+            mChatBubblesList.setAdapter(mBubblesAdapter);
+        } else {
+            mChatBubblesList.setAdapter(null);
         }
     }
 
@@ -277,11 +153,13 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
 
                 sender.setText( ((TextMessage) message).getFrom());
                 text.setText(((TextMessage) message).getText());
+
                 if (!((TextMessage) message).getFrom().equals(mMyName)) {
-                    convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimary));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_blue));
                 } else {
-                    convertView.setBackgroundColor(ContextCompat.getColor(getContext(), android.R.color.white));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_orange));
                 }
+
             } else if (message instanceof ImageMessage) {
                 Log.d(TAG, "MESSAGE IS IMAGE");
 
@@ -295,9 +173,9 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
                 text.setText(((ImageMessage) message).getText());
 
                 if (!((ImageMessage) message).getFrom().equals(mMyName)) {
-                    convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimary));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_blue));
                 } else {
-                    convertView.setBackgroundColor(ContextCompat.getColor(getContext(), android.R.color.white));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_orange));
                 }
 
                 image.setImageBitmap(((ImageMessage) message).getImage());
@@ -308,6 +186,36 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
             return convertView;
         }
 
+    }
+
+    @Override
+    public void onClick(View view) {
+
+        if (view == mButtonAttachPic) {
+
+            mParent.startImgUpload();
+            imgMessage = true;
+
+        } else if (view == mButtonSend) {
+
+            String text = mEnterTextField.getText().toString();
+            if (text.length() == 0) {
+                Snackbar.make(this.getView(), R.string.empty_message, Snackbar.LENGTH_SHORT);
+                return;
+            }
+
+            if (imgMessage) {
+                if (mParent.imgIsReady()) {
+                    mParent.onSendImageMessage(mGroup.getMyGroupId(), text);
+                    imgMessage = false;
+                }
+            } else {
+                mParent.onSendTextMessage(mGroup.getMyGroupId(), text);
+
+            }
+
+            mEnterTextField.setText("");
+        }
     }
 
     @Override
@@ -327,7 +235,7 @@ public class ChatFragment extends Fragment implements OnFragmentVisibleListener,
     public void onDetach() {
         Log.d(TAG, "ON DETACH");
         super.onDetach();
-        callback = null;
+        mParent = null;
     }
 
     @Override

@@ -5,14 +5,12 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
-import android.os.Parcelable;
 import android.support.annotation.Nullable;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
@@ -24,22 +22,19 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.io.StringWriter;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.LinkedList;
 
-import beans.Group;
+import aliona.mah.se.friendlocator.beans.Group;
 import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.R;
-import beans.ImageMessage;
-import beans.MemberLocation;
-import beans.TextMessage;
+import aliona.mah.se.friendlocator.beans.ImageMessage;
+import aliona.mah.se.friendlocator.beans.Member;
+import aliona.mah.se.friendlocator.beans.TextMessage;
 
 /**
  * Created by aliona on 2017-10-22.
@@ -93,8 +88,6 @@ public class ServerService extends Service {
         }
     }
 
-
-
     public void requestRegister(String groupName, String memberName) {
         StringWriter wr = new StringWriter();
         JsonWriter jWr = new JsonWriter(wr);
@@ -140,7 +133,7 @@ public class ServerService extends Service {
         try {
             jWriter.beginObject()
                     .name("type").value("members")
-                    .name("id").value(groupName).
+                    .name("group").value(groupName).
                     endObject();
         } catch (IOException e) {
             e.printStackTrace();
@@ -337,8 +330,7 @@ public class ServerService extends Service {
 
                             break;
                         case Config.REPLY_MEMBERS:
-                            // list of all members registered in the given group
-                            // TODO: first sent a question
+
                             String groupNameMembers = json.getString("group");
                             JSONArray membersArray = json.getJSONArray("members");
                             JSONObject member;
@@ -360,8 +352,7 @@ public class ServerService extends Service {
                             break;
 
                         case Config.REPLY_GROUPS:
-                            // list of all groups registered on the server right now
-                            // TODO: first sent a question
+
                             JSONArray groupsArray = json.getJSONArray("groups");
                             JSONObject groupJson;
 
@@ -388,13 +379,14 @@ public class ServerService extends Service {
                             String groupNameLocations = json.getString("group");
                             JSONArray locationsArray = json.getJSONArray("location");
                             JSONObject memberLocation;
-                            ArrayList<MemberLocation> memberLocations = new ArrayList<>();
+
+                            ArrayList<Member> memberLocations = new ArrayList<>();
                             for (int i = 0; i < locationsArray.length(); i++) {
                                 memberLocation = locationsArray.getJSONObject(i);
-                                MemberLocation loc = new MemberLocation(
+                                Member loc = new Member(
                                         memberLocation.getString(Config.MEMBER),
-                                        memberLocation.getString(Config.LONG),
-                                        memberLocation.getString(Config.LAT)
+                                        memberLocation.getString(Config.LAT),
+                                        memberLocation.getString(Config.LONG)
                                 );
                                 memberLocations.add(loc);
                             }
@@ -423,7 +415,7 @@ public class ServerService extends Service {
                             String memberName = json.getString(Config.MEMBER);
 
                             if (memberGroup == null || memberName == null) {
-                                // means it's my own message that I just sent and Idon't need to deal with at all
+                                // means it's my own message that I just sent and I don't need to deal with at all
                                 // I will receive it as a message to the chat anyway
                                 break;
                             }
@@ -435,8 +427,6 @@ public class ServerService extends Service {
                             intentNewMessage.putExtra(Config.TEXT_OBJ,
                                     new TextMessage(memberGroup, memberName, messageText));
                             broadcaster.sendBroadcast(intentNewMessage);
-
-//                            notifyNewMessage(memberGroup + ":" + memberName, messageText);
 
                             break;
 
@@ -480,41 +470,6 @@ public class ServerService extends Service {
         }
     }
 
-    // https://developer.android.com/guide/topics/ui/notifiers/notifications.html
-    public void notifyNewMessage(String title, String text) {
-        // The id of the channel.
-        NotificationCompat.Builder mBuilder =
-                new NotificationCompat.Builder(this, CHANNEL_ID)
-                        .setSmallIcon(R.drawable.ic_mail_orange_24dp)
-                        .setContentTitle(title)
-                        .setContentText(text)
-                        .setChannelId(CHANNEL_ID);
-        // Creates an explicit intent for an Activity in your app
-        Intent resultIntent = new Intent(this, MainActivity.class);
-
-        // The stack builder object will contain an artificial back stack for the
-        // started Activity.
-        // This ensures that navigating backward from the Activity leads out of
-        // your app to the Home screen.
-        TaskStackBuilder stackBuilder = TaskStackBuilder.create(this);
-        // Adds the back stack for the Intent (but not the Intent itself)
-        stackBuilder.addParentStack(MainActivity.class);
-        // Adds the Intent that starts the Activity to the top of the stack
-        stackBuilder.addNextIntent(resultIntent);
-        PendingIntent resultPendingIntent =
-                stackBuilder.getPendingIntent(
-                        0,
-                        PendingIntent.FLAG_UPDATE_CURRENT
-                );
-        mBuilder.setContentIntent(resultPendingIntent);
-        NotificationManager mNotificationManager =
-                (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-
-        // mNotificationId is a unique integer your app uses to identify the
-        // notification. For example, to cancel the notification, you can pass its ID
-        // number to NotificationManager.cancel().
-        mNotificationManager.notify(mNotificationId, mBuilder.build());
-    }
 
     @Override
     public void onDestroy() {

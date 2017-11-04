@@ -1,18 +1,69 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="@color/colorPaleOrange"
     tools:context="layout.ChatFragment">
 
-
     <ListView
-        android:id="@+id/list_available_joined_groups"
+        android:id="@+id/list_view_chat_bubbles"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:padding="10dp"
+        android:divider="@android:color/transparent"
+        android:stackFromBottom="true"
+        android:transcriptMode="alwaysScroll"
+        android:dividerHeight="10.0sp"
+        android:layout_weight="1" >
 
-    <include layout="@layout/fragment_conversation"/>
+    </ListView>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_margin="8dp"
+        android:background="@drawable/rounded_corner_orange">
+
+        <EditText
+            android:id="@+id/et_enter_chat_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:layout_weight="1"
+            android:ems="10"
+            android:hint="@string/hint_message"
+            android:inputType="textCapSentences|textMultiLine"
+            android:padding="10dp" />
+
+        <ImageButton
+            android:id="@+id/button_attach_pic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:layout_marginEnd="4dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="@color/colorAccent"
+            android:hapticFeedbackEnabled="true"
+            app:srcCompat="@drawable/ic_insert_photo_white_24dp" />
+
+        <ImageButton
+            android:id="@+id/button_send_message"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="@color/colorAccent"
+            app:srcCompat="@drawable/ic_send_white_24dp" />
+
+    </LinearLayout>
 
 </LinearLayout>

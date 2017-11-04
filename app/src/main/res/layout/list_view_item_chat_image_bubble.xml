@@ -4,16 +4,22 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@drawable/rounded_corner">
+    android:layout_margin="10dp"
+    android:background="@drawable/rounded_corner_orange">
 
     <TextView
         android:id="@+id/tv_chat_sender_image"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:padding="5dp"
-        android:layout_margin="10dp"
-        android:paddingStart="10dp"
+        android:paddingBottom="2dp"
+        android:paddingEnd="8dp"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:layout_marginBottom="1dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="10dp"
         android:text="TextView"
         android:textAlignment="textStart"
         android:textColor="@color/colorAccentDark"
@@ -23,16 +29,22 @@
         android:id="@+id/chat_image_view"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:scaleType="centerCrop" />
+        android:layout_margin="8dp"
+        android:padding="8dp"/>
 
     <TextView
         android:id="@+id/tv_chat_text_image"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:padding="5dp"
-        android:paddingStart="10dp"
+        android:layout_marginBottom="10dp"
+        android:layout_marginEnd="10dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="1dp"
+        android:paddingBottom="8dp"
+        android:paddingEnd="8dp"
+        android:paddingStart="8dp"
+        android:paddingTop="2dp"
         android:text="TextView"
         android:textAlignment="textStart" />
 </LinearLayout>

@@ -1,4 +1,4 @@
-package beans;
+package aliona.mah.se.friendlocator.beans;
 
 import android.os.Parcel;
 import android.os.Parcelable;
@@ -11,6 +11,10 @@ public class Member implements Parcelable {
     private String memberName;
     private String longitude;
     private String latitude;
+
+    public Member(String memberName) {
+        this.memberName = memberName;
+    }
 
     public Member(String name, String latitude, String longitude) {
         memberName = name;

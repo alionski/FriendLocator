@@ -20,25 +20,19 @@ import android.os.Parcelable;
 import android.provider.MediaStore;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
-import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
-import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.content.LocalBroadcastManager;
-import android.support.v4.view.ViewPager;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-
-import android.support.design.widget.TabLayout;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.webkit.DownloadListener;
 import android.widget.EditText;
-
+import android.widget.Toast;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
@@ -51,24 +45,21 @@ import com.google.android.gms.location.LocationSettingsResult;
 import com.google.android.gms.location.LocationSettingsStates;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.google.android.gms.maps.model.LatLng;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-
+import aliona.mah.se.friendlocator.beans.Group;
 import aliona.mah.se.friendlocator.util.BitmapResiser;
-import aliona.mah.se.friendlocator.util.ChatListCallback;
+import aliona.mah.se.friendlocator.interfaces.ChatListCallback;
 import aliona.mah.se.friendlocator.util.Config;
 import aliona.mah.se.friendlocator.util.Downloader;
-import aliona.mah.se.friendlocator.util.GroupsFragmentCallback;
-import aliona.mah.se.friendlocator.util.MapFragmentCallback;
+import aliona.mah.se.friendlocator.interfaces.GroupsFragmentCallback;
+import aliona.mah.se.friendlocator.interfaces.MapFragmentCallback;
 import aliona.mah.se.friendlocator.util.ServerService;
 import aliona.mah.se.friendlocator.util.Uploader;
-import beans.Group;
-import beans.ImageMessage;
-import beans.Member;
-import beans.MemberLocation;
-import beans.TextMessage;
+import aliona.mah.se.friendlocator.beans.ImageMessage;
+import aliona.mah.se.friendlocator.beans.Member;
+import aliona.mah.se.friendlocator.beans.TextMessage;
 import layout.ChatFragment;
 import layout.GroupsFragment;
 import layout.MapFragment;
@@ -82,19 +73,24 @@ public class MainActivity extends AppCompatActivity implements
         Downloader.DownloadListener {
 
     public static final String TAG = MainActivity.class.getName();
+    public static final String SAVED_GROUPS = "saved_groups_ids";
+
+
     public static final int GROUPS_ID = 0;
     public static final int CHAT_ID = 1;
     public static final int MAP_ID = 2;
     private static int CURRENT_FRAGMENT;
+
+    public static final String GROUPS_TAG = "groups_fragment";
+    public static final String CHAT_TAG = "chat_fragment";
+    public static final String MAP_TAG = "map_fragment";
+
     static final int REQUEST_IMAGE_CAPTURE = 7776;
     static final int PERMISSIONS_REQUEST_ACCESS_LOCATION = 7777;
     static final int REQUEST_CHECK_LOCATION_SETTINGS = 7778;
 
-    private ViewPager mViewPager;
-    private SwipeAdapter mAdapter;
-
     private IncomingServiceConnection mServiceConnection;
-    private ServerService mIncMsgService;
+    private ServerService mService;
     public final static String IP = "195.178.227.53";
     public final static int PORT = 7117;
 
@@ -106,16 +102,31 @@ public class MainActivity extends AppCompatActivity implements
     private Location mLastLocation;
 
     private HashMap<String, Group> mGroups = new HashMap<>();
+    private HashMap<String, ArrayList<Member>> mMembers = new HashMap<>();
     private HashMap<String, ArrayList<Parcelable>> mMessages = new HashMap<>();
     private Bitmap mImageToDispatch;
     private Uri mPictureUri;
 
     private String mUsername;
 
+    private void restoreInstanceState(Bundle savedInstanceState) {
+        // TODO: check casts?
+        mGroups = (HashMap<String, Group>) savedInstanceState.getSerializable(SAVED_GROUPS);
+
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        if (savedInstanceState != null) {
+            restoreInstanceState(savedInstanceState);
+        }
+
+        // Set up action bar.
+        Toolbar myToolbar = findViewById(R.id.main_toolbar);
+        setSupportActionBar(myToolbar);
 
         SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
         String defaultValue = getResources().getString(R.string.default_username);
@@ -134,9 +145,6 @@ public class MainActivity extends AppCompatActivity implements
                     .addApi(LocationServices.API)
                     .build();
         }
-
-        initialiseUI();
-
     }
 
     @Override
@@ -158,71 +166,69 @@ public class MainActivity extends AppCompatActivity implements
         if (mGoogleApiClient.isConnected()) {
             checkLocationSettings();
         }
+
+        setFragment(CURRENT_FRAGMENT,  null);
     }
 
-    private void initialiseUI() {
 
-        CURRENT_FRAGMENT = GROUPS_ID;
+    private void setFragment(int idNumber, Group group) {
+        FragmentManager fm = getSupportFragmentManager();
+        CURRENT_FRAGMENT = idNumber;
 
-        mAdapter = new SwipeAdapter(getSupportFragmentManager());
+        switch(idNumber) {
+            case GROUPS_ID:
 
-        // Set up action bar.
-        Toolbar myToolbar = findViewById(R.id.main_toolbar);
-        setSupportActionBar(myToolbar);
-
-        // Set up the ViewPager, attaching the adapter.
-        mViewPager = findViewById(R.id.pager);
-        mViewPager.setAdapter(mAdapter);
-
-        TabLayout tabLayout = findViewById(R.id.tab_layout);
-
-        tabLayout.addTab(tabLayout.newTab().setText(getResources().getString(R.string.tab_groups)));
-        tabLayout.addTab(tabLayout.newTab().setText(getResources().getString(R.string.tab_chat)));
-        tabLayout.addTab(tabLayout.newTab().setText(getResources().getString(R.string.tab_map)));
-
-        tabLayout.setTabGravity(TabLayout.GRAVITY_FILL);
-
-        mViewPager.addOnPageChangeListener(new TabLayout.TabLayoutOnPageChangeListener(tabLayout));
-        // TODO: remove listener in onPause
-        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
-            @Override
-            public void onTabSelected(TabLayout.Tab tab) {
-
-                CURRENT_FRAGMENT = tab.getPosition();
-                mViewPager.setCurrentItem(tab.getPosition());
-
-                if (CURRENT_FRAGMENT == GROUPS_ID) {
-
-                    GroupsFragment frag = (GroupsFragment) getSupportFragmentManager().findFragmentByTag(
-                            getFragmentTag(R.id.pager, GROUPS_ID));
-                    frag.fragmentBecameVisible();
-
-                } else if (CURRENT_FRAGMENT == CHAT_ID) {
-                    if (mIncMsgService != null) {
-                        mIncMsgService.requestAllGroupsList();
-                    }
-
-                    ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(
-                            getFragmentTag(R.id.pager, CHAT_ID));
-
-                    frag.fragmentBecameVisible();
-
-                } else if (CURRENT_FRAGMENT == MAP_ID) {
-
-                    MapFragment frag = (MapFragment) getSupportFragmentManager().findFragmentByTag(
-                            getFragmentTag(R.id.pager, MAP_ID));
-
+                if (mService != null) {
+                    mService.requestAllGroupsList();
                 }
-            }
 
-            @Override
-            public void onTabUnselected(TabLayout.Tab tab) { }
+                GroupsFragment groups = (GroupsFragment) fm.findFragmentByTag(GROUPS_TAG);
 
-            @Override
-            public void onTabReselected(TabLayout.Tab tab) {
-                onTabSelected(tab);
-            }
-        });
+                if (groups == null) {
+                    groups = new GroupsFragment();
+                }
+
+                fm.beginTransaction()
+                        .replace(R.id.fragment_main_holder, groups, GROUPS_TAG)
+                        .commit();
+
+                setTitle(R.string.app_name);
+                break;
+
+            case CHAT_ID:
+                ChatFragment chat = (ChatFragment) fm.findFragmentByTag(CHAT_TAG);
+
+                if (chat == null) {
+                    chat = ChatFragment.newInstance(mUsername, group);
+                }
+
+                fm.beginTransaction()
+                        .setCustomAnimations(android.R.animator.fade_in, android.R.animator.fade_out)
+                        .replace(R.id.fragment_main_holder, chat, CHAT_TAG)
+                        .addToBackStack(null)
+                        .commit();
+
+                setTitle(R.string.tab_chat);
+                break;
+
+            case MAP_ID:
+                MapFragment map = (MapFragment) fm.findFragmentByTag(MAP_TAG);
+
+                if (map == null) {
+                    map = new MapFragment();
+                }
+
+                // TODO: or shall I do with show/hide
+                map.setGroup(group);
+
+                fm.beginTransaction()
+                        .replace(R.id.fragment_main_holder, map, MAP_TAG)
+                        .addToBackStack(null)
+                        .commit();
+
+                setTitle(R.string.tab_map);
+                break;
+        }
     }
 
     @Override
@@ -264,7 +270,7 @@ public class MainActivity extends AppCompatActivity implements
                             public void onClick(DialogInterface dialogInterface, int i) {
                                 String name = enterName.getText().toString();
                                 if (!name.equals("")) {
-                                    saveNewToSharedPreferences(name);
+                                    setUsername(name);
                                 }
                                 dialogInterface.dismiss();
                             }
@@ -273,7 +279,7 @@ public class MainActivity extends AppCompatActivity implements
         dialog.show();
     }
 
-    private void saveNewToSharedPreferences(String name) {
+    private void setUsername(String name) {
 
         SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPref.edit();
@@ -292,6 +298,437 @@ public class MainActivity extends AppCompatActivity implements
         MenuInflater inflater = getMenuInflater();
         inflater.inflate(R.menu.settings_tollbar, menu);
         return true;
+    }
+
+
+
+
+
+
+
+
+
+    ///////////////////////////////////// INTERFACES METHODS
+
+
+
+
+
+
+
+
+    @Override
+    public void notifyJoinedStatusChanged(String groupName, boolean isJoined) {
+        Group group = mGroups.get(groupName);
+        if (!isJoined) {
+            mService.requestUnregister(group.getMyGroupId());
+        } else {
+            mService.requestRegister(groupName, getUsername());
+        }
+    }
+
+    @Override
+    public void startNewGroup(String groupName) {
+        mService.requestRegister(groupName, getUsername());
+    }
+
+    @Override
+    public void showChat(String groupName) {
+        setFragment(CHAT_ID, mGroups.get(groupName));
+    }
+
+    @Override
+    public ArrayList requestUpdateGroups() {
+        Log.d(TAG, "requestUpdateGroups()" + mGroups.values().toArray( new Group[mGroups.size()]).length);
+        debugPrintMap();
+
+        ArrayList<Group> gr = new ArrayList<Group>(mGroups.values());
+        Log.d(TAG, "ARE GROUPS NULL? " + mGroups.size());
+        return gr;
+    }
+
+    @Override
+    public void showMap(String groupName) {
+        setFragment(MAP_ID, mGroups.get(groupName));
+    }
+
+    @Override
+    public HashMap<String, ArrayList<Member>> getMembers() {
+        return mMembers;
+    }
+
+    @Override
+    public LatLng requestLocationUpdate() {
+        if (mLastLocation != null) {
+            LatLng loc = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+            Log.d(TAG, loc.toString());
+            return loc;
+        }
+        return null;
+    }
+
+    @Override
+    public ArrayList<Member> requestMembersUpdate(String groupName) {
+        return mMembers.get(groupName);
+    }
+
+    @Override
+    public void onSendTextMessage(String myId, String messageText) {
+        mService.sendTextMessage(myId, messageText);
+    }
+
+    @Override
+    public void onSendImageMessage(String myId, String messageText) {
+        ImageMessage imgMsg = new ImageMessage();
+        imgMsg.setFrom(myId);
+        imgMsg.setText(messageText);
+        imgMsg.setLatitude(String.valueOf(mLastLocation.getLatitude()));
+        imgMsg.setLongitude(String.valueOf(mLastLocation.getLongitude()));
+        imgMsg.setImage(mImageToDispatch);
+
+        mService.sendPictureMessage(imgMsg);
+    }
+
+    @Override
+    public void startImgUpload() {
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        mPictureUri = BitmapResiser.generateURI();
+        takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, mPictureUri);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+        }
+
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
+            String pathToPicture = mPictureUri.getPath();
+            mImageToDispatch = BitmapResiser.getScaled(pathToPicture,
+                    300, 300);
+        }
+    }
+
+    @Override
+    public boolean imgIsReady() {
+        return mImageToDispatch != null;
+    }
+
+    @Override
+    public ArrayList<Parcelable> requestReadMessages(String groupName) {
+        if (mMessages != null && mMessages.get(groupName) != null) {
+            Log.d(TAG, "SIZE IN MAIN" + mMessages.get(groupName).size());
+        }
+        return mMessages.get(groupName);
+    }
+
+    /////////////////////////////// ADAPTER SPECIFIC
+
+    @Override
+    public void onBackPressed() {
+        if (CURRENT_FRAGMENT == CHAT_ID) {
+            CURRENT_FRAGMENT = GROUPS_ID;
+            mService.requestAllGroupsList();
+        } else if (CURRENT_FRAGMENT == MAP_ID) {
+            CURRENT_FRAGMENT = GROUPS_ID;
+            mService.requestAllGroupsList();
+        }
+        super.onBackPressed();
+    }
+
+    @Override
+    public void imageDownloaded(ImageMessage msg) {
+        receiveMessage(msg.getGroup(), msg);
+    }
+
+    // SERVICE SPECIFIC //////////////////////////////////////////////////////////////////////
+
+    private void createBroadcastReceiver() {
+        mMessageReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+
+                String action = intent.getAction();
+
+                switch(action) {
+                    case Config.REPLY_REGISTER:
+
+                        String groupName = intent.getStringExtra(Config.GROUP);
+                        String groupId = intent.getStringExtra(Config.ID);
+
+                        if (mMembers.get(groupName) == null) {
+                            mMembers.put(groupName, new ArrayList<Member>());
+                        }
+                        mMembers.get(groupName).add(new Member(getUsername()));
+
+                        if (mGroups.get(groupName) == null) {
+                            mGroups.put(groupName, new Group(groupName));
+                        }
+                        mGroups.get(groupName).setMyGroupId(groupId);
+
+                        mService.requestAllGroupsList();
+                        mService.requestAllGroupMembers(groupName);
+
+                        Log.i(TAG, "REGISTERED TO NEW GROUP " + groupName + groupId);
+                        break;
+
+                    case Config.REPLY_UNREGISTER:
+
+                        String idToDelete = intent.getStringExtra(Config.ID);
+
+                        String groupToLeave = null;
+
+                        for (Group groupToRemove : mGroups.values()) {
+                            if (idToDelete.equals(groupToRemove.getMyGroupId())) {
+                                groupToRemove.setMyGroupId(null);
+                                groupToLeave = groupToRemove.getGroupName();
+                                mGroups.put(groupToRemove.getGroupName(), groupToRemove);
+                            }
+                        }
+
+                        ArrayList<Member> membs = mMembers.get(groupToLeave);
+
+                        for (Member memb : membs) {
+                            if (memb.getMemberName().equals(getUsername())) {
+                                mMembers.get(groupToLeave).remove(memb);
+                                break;
+                            }
+                        }
+
+                        mService.requestAllGroupsList();
+
+                        Log.i(TAG, "UNREGISTERED FROM " + groupToLeave + " WITH ID " + idToDelete);
+                        break;
+
+                    case Config.REPLY_MEMBERS:
+
+                        String groupName2 = intent.getStringExtra(Config.GROUP);
+                        ArrayList<String> names = intent.getStringArrayListExtra(Config.MEMBERS_ARRAY);
+
+                        if (mMembers.get(groupName2) == null) {
+                            mMembers.put(groupName2, new ArrayList<Member>());
+                        }
+
+                        ArrayList<Member> newMembers = new ArrayList<>();
+
+                        for (String name : names) {
+                            boolean found = false;
+                            for (Member memb : mMembers.get(groupName2)) {
+                                if (memb.getMemberName().equals(name)) {
+                                    newMembers.add(memb);
+                                    found = true;
+                                }
+                            }
+                            if (!found) {
+                                newMembers.add(new Member(name));
+                            }
+                        }
+
+                        mMembers.put(groupName2, newMembers);
+
+                        updateGroupsUI();
+                        break;
+
+                    case Config.REPLY_GROUPS:
+
+                        Log.i(TAG, "GROUPS UPDATE RECEIVED");
+
+                        ArrayList<Group> groups = intent.getParcelableArrayListExtra(Config.GROUPS_ARRAY);
+                        HashMap<String, Group> tempMap = new HashMap<>();
+
+                        if (!mGroups.isEmpty()) {
+                            // swapping the groups from the server, adding new ones and getting rid of non-existent
+                            for (Group serverGroup : groups) {
+
+                                String serverName = serverGroup.getGroupName();
+                                if (mGroups.get(serverName) == null) {
+                                    tempMap.put(serverName, serverGroup);
+
+                                } else {
+                                    tempMap.put(serverName, mGroups.get(serverName));
+                                }
+                            }
+
+                            mGroups = tempMap;
+
+                        } else {
+                            // initialising after the first update
+                            for (Group serverGroup : groups) {
+                                mGroups.put(serverGroup.getGroupName(), serverGroup);
+                            }
+                        }
+
+                        for (Group group : mGroups.values()) {
+                            mService.requestAllGroupMembers(group.getGroupName());
+                        }
+
+                        break;
+
+                    case Config.UPDATE_LOCATIONS:
+                        Log.d(TAG, "RECEIVED LOCATIONS  ");
+
+                        String locGroupName = intent.getStringExtra(Config.GROUP);
+                        ArrayList<Member> memberLocations = intent.getParcelableArrayListExtra(Config.GROUP_LOCATIONS);
+                        // overwriting all members with new locations, thus also deleting non-existing users;
+                        mMembers.put(locGroupName, memberLocations);
+
+                        if (CURRENT_FRAGMENT == MAP_ID) {
+                            MapFragment frag = (MapFragment) getSupportFragmentManager().findFragmentByTag(MAP_TAG);
+                            frag.updateLocations();
+                        }
+
+                        Log.d(TAG, "UPDATED LOCATIONS");
+                        break;
+
+                    case Config.UPDATE_EXCEPTION:
+
+                        String error = intent.getStringExtra(Config.EXCEPTION_MSG);
+                        Toast.makeText(getApplicationContext(), error, Toast.LENGTH_SHORT).show();
+
+                        break;
+                    case Config.UPDATE_IMAGECHAT:
+
+                        ImageMessage imgMsg = intent.getParcelableExtra(Config.IMG_OBJECT);
+                        String id = intent.getStringExtra(Config.IMG_ID);
+                        String port = intent.getStringExtra(Config.IMG_PORT);
+
+                        startDownload(imgMsg, id, port);
+
+                        break;
+
+                    case Config.UPDATE_TEXTCHAT:
+
+                        Parcelable msg = intent.getParcelableExtra(Config.TEXT_OBJ);
+                        String textGroupName = ((TextMessage)msg).getGroup();
+
+                        receiveMessage(textGroupName, msg);
+
+                        break;
+                    case Config.REPLY_UPLOAD:
+
+                        String imageId = intent.getStringExtra(Config.IMG_ID);
+                        String portUp = intent.getStringExtra(Config.IMG_PORT);
+                        new Uploader(imageId, portUp, mImageToDispatch);
+                        mImageToDispatch = null;
+                        mPictureUri = null;
+
+                        break;
+                }
+
+                debugPrintMap();
+
+            }
+        };
+    }
+
+    private void startDownload(ImageMessage imgMsg, String id, String port) {
+        new Downloader(this, imgMsg, id, port);
+    }
+
+    private void receiveMessage(String groupName, Parcelable msg) {
+
+        if (mMessages.get(groupName) == null) {
+            mMessages.put(groupName, new ArrayList<Parcelable>());
+        }
+
+        mMessages.get(groupName).add(msg);
+
+        ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(CHAT_TAG);
+        if (CURRENT_FRAGMENT == CHAT_ID && frag.getCurrentGroup().equals(groupName)) {
+            frag.updateBubblesAdapter();
+        }
+    }
+
+    private void updateGroupsUI() {
+
+        if (CURRENT_FRAGMENT != GROUPS_ID) {
+            return;
+        }
+        GroupsFragment frag = (GroupsFragment) getSupportFragmentManager().findFragmentByTag(GROUPS_TAG);
+        frag.updateGroupsList();
+    }
+
+    private void registerBroadcastListeners() {
+
+        mListener = LocalBroadcastManager.getInstance(this);
+
+        IntentFilter filter = new IntentFilter(ServerService.TAG);
+        filter.addAction(Config.REPLY_REGISTER);
+        filter.addAction(Config.REPLY_UNREGISTER);
+        filter.addAction(Config.REPLY_MEMBERS);
+        filter.addAction(Config.REPLY_GROUPS);
+        filter.addAction(Config.REPLY_LOCATION);
+        filter.addAction(Config.REPLY_UPLOAD);
+        filter.addAction(Config.UPDATE_LOCATIONS);
+        filter.addAction(Config.UPDATE_EXCEPTION);
+        filter.addAction(Config.UPDATE_IMAGECHAT);
+        filter.addAction(Config.UPDATE_TEXTCHAT);
+
+        mListener.registerReceiver(
+                mMessageReceiver, filter);
+
+    }
+
+    private void unregisterBroadcastListeners() {
+        mListener.unregisterReceiver(mMessageReceiver);
+    }
+
+    private class IncomingServiceConnection implements ServiceConnection {
+        public void onServiceConnected(ComponentName arg0, IBinder binder) {
+            ServerService.LocalService ls = (ServerService.LocalService) binder;
+            mService = ls.getService();
+            mService.requestAllGroupsList();
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+
+        }
+    }
+
+    private Group[] getGroupsAsArray() {
+        return mGroups.values().toArray( new Group[mGroups.size()]);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        unregisterBroadcastListeners();
+        unbindService(mServiceConnection);
+        stopLocationUpdates();
+    }
+
+    @Override
+    protected void onStop() {
+        mGoogleApiClient.disconnect();
+        Log.i(TAG, "GoogleApiClient in disconnected");
+        super.onStop();
+    }
+
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // TODO: stop service here, starting onCreate
+        Intent intent = new Intent(MainActivity.this, ServerService.class);
+        stopService(intent);
+    }
+
+    private void debugPrintMap() {
+        Iterator it = mGroups.entrySet().iterator();
+        while (it.hasNext()) {
+            HashMap.Entry pair = (HashMap.Entry) it.next();
+            Log.d(TAG, "+++++++++++++++++++++++++++++ DEBUG PRINT MAP ++++++++++++++++++++++++++++++");
+            Log.d(TAG, "HASH MAP KEY: " + pair.getKey());
+            Group group = (Group) pair.getValue();
+            Log.d(TAG, "---GROUP NAME: " + group.getGroupName());
+            Log.d(TAG, "---GROUP JOINED: " + (group.getMyGroupId() == null ? "not joined" : group.getMyGroupId()));
+            Log.d(TAG, "---GROUP MY ID: " + group.getMyGroupId());
+//            Log.d(TAG, "---GROUP MEMBER COUNT: " +
+//                    mMembers.get(group.getGroupName()) == null ? "null" :
+//                    "" + mMembers.get(group.getGroupName()).size());
+        }
     }
 
     ///////// LOCATION SPECIFIC
@@ -319,7 +756,7 @@ public class MainActivity extends AppCompatActivity implements
                 for (Group group : mGroups.values()) {
 
                     if (group.getMyGroupId() != null) {
-                        mIncMsgService.sendPosition(
+                        mService.sendPosition(
                                 group.getMyGroupId(),
                                 String.valueOf(mLastLocation.getLongitude()),
                                 String.valueOf(mLastLocation.getLatitude()));
@@ -432,7 +869,7 @@ public class MainActivity extends AppCompatActivity implements
         if (groups.length != 0) {
             for (Group group : groups) {
                 if (group.getMyGroupId() != null) {
-                    mIncMsgService.sendPosition(
+                    mService.sendPosition(
                             group.getMyGroupId(),
                             String.valueOf(mLastLocation.getLongitude()),
                             String.valueOf(mLastLocation.getLatitude()));
@@ -445,460 +882,5 @@ public class MainActivity extends AppCompatActivity implements
     protected void stopLocationUpdates() {
         LocationServices.FusedLocationApi.removeLocationUpdates(
                 mGoogleApiClient, this);
-    }
-
-
-    ///////////////////////////////////// INTERFACES METHODS
-
-    @Override
-    public void notifyJoinedStatusChanged(String groupName, boolean isJoined) {
-        Group group = mGroups.get(groupName);
-        if (!isJoined) {
-            mIncMsgService.requestUnregister(group.getMyGroupId());
-        } else {
-            mIncMsgService.requestRegister(groupName, getUsername());
-        }
-    }
-
-    @Override
-    public void notifyMapVisibilityChanged(String groupName, boolean isOnMap) {
-        Log.d(TAG, "IS ON MAP " + isOnMap + " " + groupName);
-        Group group = mGroups.get(groupName);
-        group.setOnMap(isOnMap);
-        mGroups.put(group.getGroupName(), group);
-    }
-
-    @Override
-    public void startNewGroup(String groupName) {
-        mIncMsgService.requestRegister(groupName, getUsername());
-    }
-
-    @Override
-    public Group[] requestUpdateGroups() {
-        Log.d(TAG, "requestUpdateGroups()" + mGroups.values().toArray( new Group[mGroups.size()]).length);
-        debugPrintMap();
-        Log.d(TAG, "ARE GROUPS NULL? " + mGroups.size());
-        Group[] groups = mGroups.values().toArray( new Group[mGroups.size()]);
-        return groups;
-    }
-
-    @Override
-    public LatLng requestLocationUpdate() {
-        if (mLastLocation != null) {
-            LatLng loc = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
-            Log.d(TAG, loc.toString());
-            return loc;
-        }
-        return null;
-    }
-
-    @Override
-    public Group[] requestGroupsUpdate() {
-        return getGroupsAsArray();
-    }
-
-    @Override
-    public void notifyGroupChosen(String groupName) {
-
-    }
-
-    @Override
-    public ArrayList requestJoinedGroups() {
-        Log.d(TAG, "requestJoinedGroups()");
-
-        ArrayList<Group> joined = new ArrayList<>();
-
-        for (Group group : getGroupsAsArray()) {
-            if (group.isJoined()) {
-                joined.add(group);
-            }
-        }
-
-        debugPrintMap();
-
-        return joined;
-    }
-
-    public String getFragmentTag(int viewPagerId, int fragmentPosition) {
-        // This is the format in which FragmentStatePagerAdapter internally set's  the fragment tag.
-        return "android:switcher:" + viewPagerId + ":" + fragmentPosition;
-    }
-
-    @Override
-    public void onSendTextMessage(String myId, String messageText) {
-        mIncMsgService.sendTextMessage(myId, messageText);
-    }
-
-    @Override
-    public void onSendImageMessage(String myId, String messageText) {
-        ImageMessage imgMsg = new ImageMessage();
-        imgMsg.setFrom(myId);
-        imgMsg.setText(messageText);
-        imgMsg.setLatitude(String.valueOf(mLastLocation.getLatitude()));
-        imgMsg.setLongitude(String.valueOf(mLastLocation.getLongitude()));
-        imgMsg.setImage(mImageToDispatch);
-
-        mIncMsgService.sendPictureMessage(imgMsg);
-    }
-
-    @Override
-    public void startImgUpload() {
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        mPictureUri = BitmapResiser.generateURI();
-        takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, mPictureUri);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-        }
-
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            String pathToPicture = mPictureUri.getPath();
-            mImageToDispatch = BitmapResiser.getScaled(pathToPicture,
-                    150, 150);
-        }
-    }
-
-    @Override
-    public boolean imgIsReady() {
-        return mImageToDispatch != null;
-    }
-
-    @Override
-    public ArrayList<Parcelable> requestReadMessages(String groupName) {
-        if (mMessages != null && mMessages.get(groupName) != null) {
-            Log.d(TAG, "SIZE IN MAIN" + mMessages.get(groupName).size());
-        }
-        return mMessages.get(groupName);
-    }
-
-    /////////////////////////////// ADAPTER SPECIFIC
-
-    @Override
-    public void onBackPressed() {
-
-        if (mViewPager.getCurrentItem() == CHAT_ID) {
-            ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(
-                    getFragmentTag(R.id.pager, CHAT_ID));
-            if (frag.bubblesVisible()) {
-                frag.goBackToChatList();
-            } else {
-                super.onBackPressed();
-            }
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    public void imageMessageReady(ImageMessage msg) {
-        receiveMessage(msg.getGroup(), msg);
-    }
-
-    private class SwipeAdapter extends FragmentPagerAdapter {
-
-        public SwipeAdapter(FragmentManager fm) {
-            super(fm);
-        }
-
-        @Override
-        public Fragment getItem(int position) {
-
-            switch (position) {
-
-                case GROUPS_ID:
-                    return new GroupsFragment();
-
-                case CHAT_ID:
-                    return ChatFragment.newInstance(mUsername);
-
-                case MAP_ID:
-                    return new MapFragment();
-            }
-            return null;
-        }
-
-        @Override
-        public int getCount() {
-            return 3;
-        }
-    }
-
-    private void debugPrintMap() {
-        Iterator it = mGroups.entrySet().iterator();
-        while (it.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) it.next();
-            Log.d(TAG, "+++++++++++++++++++++++++++++ DEBUG PRINT MAP ++++++++++++++++++++++++++++++");
-            Log.d(TAG, "HASH MAP KEY: " + pair.getKey());
-            Group group = (Group) pair.getValue();
-            Log.d(TAG, "---GROUP NAME: " + group.getGroupName());
-            Log.d(TAG, "---GROUP JOINED: " + group.isJoined());
-            Log.d(TAG, "---GROUP ON MAP: " + group.isOnMap());
-            Log.d(TAG, "---GROUP MY ID: " + group.getMyGroupId());
-            Log.d(TAG, "---GROUP MEMBER COUNT: " + group.getMembers().size());
-        }
-    }
-
-    // SERVICE SPECIFIC //////////////////////////////////////////////////////////////////////
-
-    private void createBroadcastReceiver() {
-        mMessageReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-
-                String action = intent.getAction();
-
-                switch(action) {
-                    case Config.REPLY_REGISTER:
-
-                        String groupName = intent.getStringExtra(Config.GROUP);
-                        String groupId = intent.getStringExtra(Config.ID);
-
-                        Group group = mGroups.get(groupName);
-                        if (group == null) {
-                            group = new Group(groupName);
-                            group.setJoined(true);
-                            group.setMyGroupId(groupId);
-                            mGroups.put(groupName, group);
-                        } else {
-                            group.setJoined(true);
-                            group.setMyGroupId(groupId);
-                            mGroups.put(groupName, group);
-                        }
-
-                        Log.i(TAG, "WOOHOOOOOO IT WORKS " + group + groupId);
-
-                        break;
-                    case Config.REPLY_UNREGISTER:
-
-                        String idToDelete = intent.getStringExtra(Config.ID);
-
-                        for (Group groupToRemove : mGroups.values()) {
-                            if (idToDelete.equals(groupToRemove.getMyGroupId())) {
-                                groupToRemove.setMyGroupId(null);
-                                groupToRemove.setJoined(false);
-                                groupToRemove.setOnMap(false);
-                                mGroups.put(groupToRemove.getGroupName(), groupToRemove);
-                            }
-                        }
-
-                        Log.i(TAG, "UNREGISTERED FROM GROUP WITH ID " + idToDelete);
-
-                        break;
-                    case Config.REPLY_MEMBERS:
-
-                        break;
-                    case Config.REPLY_GROUPS:
-
-                        Log.i(TAG, "GROUPS UPDATE RECEIVED");
-
-                        ArrayList<Group> groups = intent.getParcelableArrayListExtra(Config.GROUPS_ARRAY);
-                        HashMap<String, Group> tempMap = new HashMap<>();
-
-                        if (!mGroups.isEmpty()) {
-                            // swapping the groups from the server, adding new ones and getting rid of non-existent
-                            for (Group serverGroup : groups) {
-
-                                String serverName = serverGroup.getGroupName();
-
-                                if (mGroups.get(serverName) == null) {
-                                    tempMap.put(serverName, serverGroup);
-
-                                } else {
-                                    tempMap.put(serverName, mGroups.get(serverName));
-                                }
-                            }
-
-                            mGroups = tempMap;
-
-                        } else {
-                            // initialising after the first update
-                            for (Group serverGroup : groups) {
-                                mGroups.put(serverGroup.getGroupName(), serverGroup);
-                            }
-                        }
-                        break;
-
-                    case Config.UPDATE_LOCATIONS:
-                        Log.d(TAG, "RECEIVED LOCATIONS  ");
-
-                        String locGroupName = intent.getStringExtra(Config.GROUP);
-                        ArrayList<MemberLocation> memberLocations = intent.getParcelableArrayListExtra(Config.GROUP_LOCATIONS);
-
-                        if (mGroups.get(locGroupName) == null) {
-                            Group newGroup = new Group(locGroupName);
-                            mGroups.put(locGroupName, newGroup);
-                        }
-
-                        mGroups.get(locGroupName).getMembers().clear();
-                        for (MemberLocation loc : memberLocations) {
-                            Member newMember = new Member(
-                                    loc.getMemberName(),
-                                    loc.getLatitude(),
-                                    loc.getLongitude()
-                            );
-                            // TODO: adds new member at each update
-                            mGroups.get(locGroupName).getMembers().add(newMember);
-                        }
-
-                        Log.d(TAG, "UPDATED LOCATIONS: " + mGroups.toString());
-
-                        break;
-
-                    case Config.UPDATE_EXCEPTION:
-
-                        break;
-                    case Config.UPDATE_IMAGECHAT:
-
-                        ImageMessage imgMsg = intent.getParcelableExtra(Config.IMG_OBJECT);
-                        String id = intent.getStringExtra(Config.IMG_ID);
-                        String port = intent.getStringExtra(Config.IMG_PORT);
-
-                        startDownload(imgMsg, id, port);
-
-                        break;
-
-                    case Config.UPDATE_TEXTCHAT:
-
-                        Parcelable msg = intent.getParcelableExtra(Config.TEXT_OBJ);
-                        String textGroupName = ((TextMessage)msg).getGroup();
-
-                        receiveMessage(textGroupName, msg);
-
-                        break;
-                    case Config.REPLY_UPLOAD:
-
-                        String imageId = intent.getStringExtra(Config.IMG_ID);
-                        String portUp = intent.getStringExtra(Config.IMG_PORT);
-                        new Uploader(imageId, portUp, mImageToDispatch);
-                        mImageToDispatch = null;
-                        mPictureUri = null;
-
-                        break;
-                }
-
-                debugPrintMap();
-                updateChatListUI();
-                updateGroupsUI();
-
-            }
-        };
-    }
-
-    private void startDownload(ImageMessage imgMsg, String id, String port) {
-        new Downloader(this, imgMsg, id, port);
-    }
-
-    private void receiveMessage(String groupName, Parcelable msg) {
-
-        ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(
-                getFragmentTag(R.id.pager, CHAT_ID));
-
-        if (mMessages.get(groupName) == null) {
-            mMessages.put(groupName, new ArrayList<Parcelable>());
-        }
-
-        mMessages.get(groupName).add(msg);
-
-        if (mViewPager.getCurrentItem() == CHAT_ID &&
-                groupName.equals(frag.getCurrentGroup())) {
-
-            frag.updateBubblesAdapter();
-        }
-    }
-
-
-    private void updateChatListUI() {
-        if (mViewPager.getCurrentItem() == CHAT_ID) {
-            Log.d(TAG, "updateChatListUI");
-
-            ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(
-                    getFragmentTag(R.id.pager, CHAT_ID));
-            if (frag.bubblesVisible()) {
-                return;
-            }
-            frag.updateGroupsAdapter();
-        }
-    }
-
-    private void updateGroupsUI() {
-        if (mViewPager.getCurrentItem() == GROUPS_ID) {
-
-            GroupsFragment frag = (GroupsFragment) getSupportFragmentManager().findFragmentByTag(
-                    getFragmentTag(R.id.pager, GROUPS_ID));
-            if (frag != null) {
-                frag.updateGroupsList(getGroupsAsArray());
-            }
-        }
-    }
-
-    private void registerBroadcastListeners() {
-
-        mListener = LocalBroadcastManager.getInstance(this);
-
-        IntentFilter filter = new IntentFilter(ServerService.TAG);
-        filter.addAction(Config.REPLY_REGISTER);
-        filter.addAction(Config.REPLY_UNREGISTER);
-        filter.addAction(Config.REPLY_MEMBERS);
-        filter.addAction(Config.REPLY_GROUPS);
-        filter.addAction(Config.REPLY_LOCATION);
-        filter.addAction(Config.REPLY_UPLOAD);
-        filter.addAction(Config.UPDATE_LOCATIONS);
-        filter.addAction(Config.UPDATE_EXCEPTION);
-        filter.addAction(Config.UPDATE_IMAGECHAT);
-        filter.addAction(Config.UPDATE_TEXTCHAT);
-
-        mListener.registerReceiver(
-                mMessageReceiver, filter);
-
-    }
-
-    private void unregisterBroadcastListeners() {
-        mListener.unregisterReceiver(mMessageReceiver);
-    }
-
-    private class IncomingServiceConnection implements ServiceConnection {
-        public void onServiceConnected(ComponentName arg0, IBinder binder) {
-            ServerService.LocalService ls = (ServerService.LocalService) binder;
-            mIncMsgService = ls.getService();
-
-            mIncMsgService.requestAllGroupsList();
-
-        }
-
-        @Override
-        public void onServiceDisconnected(ComponentName componentName) {
-
-        }
-    }
-
-    private Group[] getGroupsAsArray() {
-        return mGroups.values().toArray( new Group[mGroups.size()]);
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        unregisterBroadcastListeners();
-        unbindService(mServiceConnection);
-        stopLocationUpdates();
-    }
-
-    @Override
-    protected void onStop() {
-        mGoogleApiClient.disconnect();
-        Log.i(TAG, "GoogleApiClient in disconnected");
-        super.onStop();
-    }
-
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // TODO: stop service here, starting onCreate
-        Intent intent = new Intent(MainActivity.this, ServerService.class);
-        stopService(intent);
     }
 }

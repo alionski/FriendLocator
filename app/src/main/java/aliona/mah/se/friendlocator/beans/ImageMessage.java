@@ -1,4 +1,4 @@
-package beans;
+package aliona.mah.se.friendlocator.beans;
 
 import android.graphics.Bitmap;
 import android.os.Parcel;

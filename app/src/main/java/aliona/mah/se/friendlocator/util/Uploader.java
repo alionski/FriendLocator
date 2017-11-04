@@ -27,7 +27,7 @@ public class Uploader extends AsyncTask<String, Void, Void> {
     @Override
     protected Void doInBackground(String... strings) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        toSend.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+        toSend.compress(Bitmap.CompressFormat.JPEG, 50, stream);
         byte[] byteArray = stream.toByteArray();
         Socket socket;
         try {
@@ -37,7 +37,7 @@ public class Uploader extends AsyncTask<String, Void, Void> {
             output.writeUTF(strings[1]);
             output.flush();
             output.writeObject(byteArray);
-            Log.d("UPLOADER ARRAY SIZE", ""+byteArray.length);
+            Log.d("UPLOADER ARRAY SIZE", "" + byteArray.length);
             output.flush();
             socket.close();
             Log.d("UPLOADER", "DONE UPLOADING");

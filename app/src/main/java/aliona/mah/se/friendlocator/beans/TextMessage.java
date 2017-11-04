@@ -1,4 +1,4 @@
-package beans;
+package aliona.mah.se.friendlocator.beans;
 
 import android.os.Parcel;
 import android.os.Parcelable;

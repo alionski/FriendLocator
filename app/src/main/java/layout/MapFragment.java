@@ -4,8 +4,6 @@ package layout;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
-import android.location.Location;
-import android.media.MediaCodec;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
@@ -13,9 +11,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -27,22 +22,25 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import java.util.ArrayList;
+
 import aliona.mah.se.friendlocator.R;
-import aliona.mah.se.friendlocator.util.MapFragmentCallback;
-import beans.Group;
-import beans.Member;
+import aliona.mah.se.friendlocator.beans.Member;
+import aliona.mah.se.friendlocator.interfaces.MapFragmentCallback;
+import aliona.mah.se.friendlocator.beans.Group;
 
 /**
  * A simple {@link Fragment} subclass.
  */
-public class MapFragment extends Fragment implements OnMapReadyCallback,
-        GoogleMap.OnInfoWindowClickListener {
+public class MapFragment extends Fragment implements OnMapReadyCallback {
     private final static String TAG = MapFragment.class.getName();
+    private static final String GROUP = "map_group";
     private final int MY_PERMISSIONS_REQUEST_GPS = 5555;
     private boolean mPermissionGranted = false;
     private MapView mMapView;
     private GoogleMap mMap;
-    private Group[] groups;
+    private Group mGroup;
+    private ArrayList<Member> members;
     private LatLng mMyPositon;
     private MapFragmentCallback callback;
 
@@ -50,6 +48,28 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
     public MapFragment() {
         // Required empty public constructor
     }
+
+    public static MapFragment newInstance(Group group) {
+        MapFragment frag = new MapFragment();
+        Bundle args = new Bundle();
+        args.putParcelable(GROUP, group);
+        frag.setArguments(args);
+        return frag;
+    }
+
+    public void setGroup(Group group) {
+        mGroup = group;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        Bundle args = getArguments();
+        if (args != null) {
+            mGroup = args.getParcelable(GROUP);
+        }
+    }
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -76,6 +96,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
 
     @Override
     public void onAttach(Context context) {
+        Log.d(TAG, "ON ATTACH");
         super.onAttach(context);
         if (context instanceof MapFragmentCallback) {
             callback = (MapFragmentCallback) context;
@@ -87,6 +108,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
         Log.d(TAG, "ON RESUME");
         super.onResume();
         mMapView.onResume();
+    }
+
+    public void updateLocations() {
+        addMarkers();
     }
 
     /**
@@ -108,8 +133,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
         Log.i(TAG, "ABOUT TO ADD MARKERS");
         addMarkers();
 
-        mMap.setInfoWindowAdapter( new InfoAdapter());
-        mMap.setOnInfoWindowClickListener(this);
     }
 
     private void addSelf() {
@@ -129,11 +152,14 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
 
     private void addMarkers() {
 
+        if (mMap == null) {
+            return;
+        }
+
         mMap.clear();
 
         mMyPositon = callback.requestLocationUpdate();
-        Log.d(TAG, mMyPositon.toString());
-        groups = callback.requestGroupsUpdate();
+        members = callback.requestMembersUpdate(mGroup.getGroupName());
 
         Log.d(TAG, "ADDING MARKERS " + mMyPositon.toString());
         mMap.moveCamera(CameraUpdateFactory.newLatLng(mMyPositon));
@@ -141,71 +167,39 @@ public class MapFragment extends Fragment implements OnMapReadyCallback,
         mMap.getUiSettings().setCompassEnabled(true);
         mMap.animateCamera(CameraUpdateFactory.zoomTo(8.0f)); // should be between min = 2.0 and max = 21.0
 
-        Log.d(TAG, "REACHED NULL CHECK NULL");
-        if (groups == null || groups.length == 0) {
-            Log.d(TAG, "GROUPS ARE NULL");
+        if (members == null || members.size() == 0) {
+            Log.d(TAG, "LOCATIONS ARE NULL OR EMPTY");
             return;
         }
 
-        for (Group group : groups) {
-            if (group.isOnMap()) {
-                Log.d(TAG, "LOOPING THROUGH FIRST JOINED GROUP, SIZE" + group.getMembers());
-                for (Member member : group.getMembers()) {
-                    Log.d(TAG, "ADDING TO MAP");
-                    Log.d(TAG, member.getMemberName() + " " + member.getLongitude());
-                    double longitude, latitude;
-                    try {
-                        longitude = Double.parseDouble(member.getLongitude());
-                        latitude = Double.parseDouble(member.getLatitude());
-                    } catch (NumberFormatException locationNonAvailable) {
-                        continue;
-                    }
+        for (Member member : members) {
+            Log.d(TAG, "ADDING TO MAP");
+            Log.d(TAG, member.getMemberName() + " " + member.getLongitude());
+            double longitude, latitude;
 
-                    LatLng memberPosition = new LatLng(latitude, longitude);
-
-                    Marker marker = mMap.addMarker( new MarkerOptions()
-                            .position(memberPosition)
-                            .title(member.getMemberName())
-                            .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
-                            .snippet("Group:" + group.getGroupName())
-                    );
-
-                    Log.d(TAG, "ADD TO MAP SUCCESS");
-                    marker.showInfoWindow();
-                }
+            if (member.getLatitude() == null || member.getLongitude() == null) {
+                continue;
             }
-        }
 
-    }
+            try {
+                longitude = Double.parseDouble(member.getLongitude());
+                latitude = Double.parseDouble(member.getLatitude());
+            } catch (NumberFormatException locationNonAvailable) {
+                Log.d(TAG, locationNonAvailable.toString());
+                continue;
+            }
 
-    @Override
-    public void onInfoWindowClick(Marker marker) {
-        // TODO: get the tag from the marker and redirect to the chat
-        Toast.makeText(this.getContext(), "Info window clicked",
-                Toast.LENGTH_SHORT).show();
-    }
+            LatLng memberPosition = new LatLng(latitude, longitude);
 
-    private class InfoAdapter implements GoogleMap.InfoWindowAdapter {
+            Marker marker = mMap.addMarker( new MarkerOptions()
+                    .position(memberPosition)
+                    .title(member.getMemberName())
+                    .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
+                    .snippet("Group:" + mGroup.getGroupName()
+            ));
 
-        @Override
-        public View getInfoWindow(Marker marker) {
-            return null;
-        }
-
-        @Override
-        public View getInfoContents(Marker marker) {
-//            marker.setIcon(BitmapDescriptorFactory.fromResource(R.drawable.ic_mail_orange_24dp));
-
-            View popup = getLayoutInflater().inflate(R.layout.map_info_window, null);
-
-            ImageView icon = popup.findViewById(R.id.map_icon);
-            icon.setImageResource(R.drawable.ic_mail_orange_48dp);
-            TextView tv = popup.findViewById(R.id.map_title);
-            tv.setText(marker.getTitle());
-            tv = popup.findViewById(R.id.map_snippet);
-            tv.setText(marker.getSnippet());
-
-            return(popup);
+            Log.d(TAG, "ADD TO MAP SUCCESS");
+            marker.showInfoWindow();
         }
     }
 

@@ -5,8 +5,6 @@ import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.util.Log;
 
-import com.squareup.haha.perflib.Main;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -14,7 +12,7 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 
 import aliona.mah.se.friendlocator.MainActivity;
-import beans.ImageMessage;
+import aliona.mah.se.friendlocator.beans.ImageMessage;
 
 /**
  * Created by aliona on 2017-11-02.
@@ -72,8 +70,8 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
     @Override
     protected void onPostExecute(Bitmap result) {
         msg.setImage(result);
-        Log.d("DOWBLOADER", "MESSAGE RECEIVED " + msg.getImage().getByteCount());
-        listener.imageMessageReady(msg);
+        Log.d(TAG, "MESSAGE RECEIVED " + msg.getImage().getByteCount());
+        listener.imageDownloaded(msg);
     }
 
     @Override
@@ -83,7 +81,7 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
     protected void onProgressUpdate(Void... values) {}
 
     public interface DownloadListener {
-        void imageMessageReady(ImageMessage msg);
+        void imageDownloaded(ImageMessage msg);
     }
 
 }

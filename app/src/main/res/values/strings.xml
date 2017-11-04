@@ -2,7 +2,6 @@
 
     <string name="service_description">Service for TCP/IP communication in FriendLocator</string>
     <string name="app_name">FriendLocator</string>
-    <string name="title_activity_maps">Map</string>
 
 
     <string name="default_username">Anonymous</string>
@@ -10,24 +9,27 @@
 
 
     <string name="tab_map">Map</string>
-    <string name="tab_groups">Groups</string>
     <string name="tab_chat">Chat</string>
 
-    <!-- TODO: Remove or change this placeholder text -->
-    <string name="hello_blank_fragment">Hello blank fragment</string>
 
+    <!--GroupsFragment-->
+    <string name="welcome_message">Welcome to FriendLocator! Join a group to be able to chat with members and see their locations
+    on the map.</string>
     <string name="groups_button_join">Join</string>
     <string name="groups_button_leave">Leave</string>
 
-    <string name="groups_toggle_on_map">On Map</string>
-    <string name="groups_toggle_off_map">Off Map</string>
-
     <string name="add_new_group">Enter new group name:</string>
     <string name="add_new_group_done">Add group</string>
+    <string name="group_members">Members: </string>
+    <string name="button_chat_description">Start chatting</string>
+    <string name="button_map_description">See group members on map</string>
 
+
+    <!--ChatFragment-->
+
+    <string name="empty_message">The message is empty. Write something first maybe?"</string>
+    <string name="hint_message">Say something...</string>
     <string name="change_name_text">You can change your name here</string>
     <string name="change_name_done">Change name</string>
 
-    <string name="chat_current_group">CURRENT_GROUP</string>
-    <string name="chat_current_id">CURRENT_ID</string>
 </resources>
