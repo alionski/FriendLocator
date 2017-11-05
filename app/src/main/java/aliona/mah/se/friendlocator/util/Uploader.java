@@ -9,8 +9,6 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
-import aliona.mah.se.friendlocator.MainActivity;
-
 /**
  * Created by aliona on 2017-11-02.
  */
@@ -31,7 +29,7 @@ public class Uploader extends AsyncTask<String, Void, Void> {
         byte[] byteArray = stream.toByteArray();
         Socket socket;
         try {
-            socket = new Socket(MainActivity.IP, Integer.valueOf(strings[0]));
+            socket = new Socket(ServerService.IP, Integer.valueOf(strings[0]));
             ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
             output.flush();
             output.writeUTF(strings[1]);

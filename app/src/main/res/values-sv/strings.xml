@@ -1,8 +1,35 @@
 <resources>
+    <string name="service_description">Service för TCP/IP kommunikation i FriendLocator</string>
     <string name="app_name">FriendLocator</string>
-
+    <string name="default_username">Anonym</string>
+    <string name="username">Anonym</string>
     <string name="tab_map">Karta</string>
-    <string name="tab_chat">Chat</string>
+    <string name="tab_chat">Chatt</string>
 
-    <!-- TODO: Remove or change this placeholder text -->
+
+    <!--GroupsFragment-->
+    <string name="welcome_message">Välkommen till FriendLocator! Gå med i en grupp för att kunna chatta med medlemmarna och se deras positioner på kartan.</string>
+    <string name="groups_button_join">Gå med</string>
+    <string name="groups_button_leave">Lämna</string>
+
+    <string name="add_new_group">Skriv gruppnam:</string>
+    <string name="add_new_group_done">Lägg till</string>
+    <string name="group_members">Medlemmar: </string>
+    <string name="button_chat_description">Börja chatta</string>
+    <string name="button_map_description">See medlemmarna på kartan</string>
+
+    <!--ChatFragment-->
+
+    <string name="photo_ready">Fotot är färdigt</string>
+    <string name="empty_message">Meddelandet är tomt. Skriv någonting först kanske?</string>
+    <string name="hint_message">Skriv någonting...</string>
+    <string name="change_name_text">Du kan ändra ditt namn här</string>
+    <string name="change_name_done">Ändra namn</string>
+
+    <!--ServerService-->
+    <string name="disconnection_notice">\"Did you get your disconnection notice? Mine came in the mail todaaaay.
+        They seem to think I\'m disconnected. Don\'t think I know what to reaaaad or wriiiite or saaaay.
+        Glossaries injected daily. Words and numbers spell out the price to paaaay.
+        It simply states \"you're disconnected baby\".
+        See how easily it all slips awaaay\" </string>
 </resources>

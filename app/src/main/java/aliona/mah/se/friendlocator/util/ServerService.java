@@ -1,37 +1,27 @@
 package aliona.mah.se.friendlocator.util;
 
-import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Message;
 import android.support.annotation.Nullable;
-import android.support.v4.app.NotificationCompat;
-import android.support.v4.app.TaskStackBuilder;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.JsonWriter;
 import android.util.Log;
-
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.net.Socket;
 import java.util.ArrayList;
-
 import aliona.mah.se.friendlocator.beans.Group;
-import aliona.mah.se.friendlocator.MainActivity;
-import aliona.mah.se.friendlocator.R;
 import aliona.mah.se.friendlocator.beans.ImageMessage;
 import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.beans.TextMessage;
@@ -42,49 +32,37 @@ import aliona.mah.se.friendlocator.beans.TextMessage;
 
 public class ServerService extends Service {
     public static final String TAG = ServerService.class.getName();
-
     public static final String JSON_TYPE = "type";
-
-    private Socket mSocket;
-    public final static String IP = "ip";
-    public final static String PORT = "port";
-    private String serverIp;
-    private int serverPort;
+    public final static String IP = "195.178.227.53";
+    public final static int PORT = 7117;
     private HandlerThread mMainThread;
     private Handler mMainLoopHandler;
-
-    public static final int mNotificationId = 888888;
-    public static final String CHANNEL_ID = "friend_locator_incoming_message";
+    private final IBinder mBinder = new LocalBinder();
 
     @Override
     public void onCreate() {
+        Log.d(TAG, "ON CREATE");
+        mMainThread = new MainThread(IP, PORT);
+        mMainThread.start();
+        mMainLoopHandler = new Handler(mMainThread.getLooper());
         super.onCreate();
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if(intent!=null) { // intent null vid återstart vid START_STICKY
-            Bundle bundle = intent.getExtras();
-            serverIp = bundle.getString(IP);
-            serverPort = bundle.getInt(PORT);
-
-            mMainThread = new MainThread(serverIp, serverPort);
-            mMainThread.start();
-            mMainLoopHandler = new Handler(mMainThread.getLooper());
-            // TODO: send messages via handler
-        }
+        Log.d(TAG, "ON START COMMAND");
         return Service.START_STICKY;
     }
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return new LocalService();
+        return mBinder;
     }
 
-
-    public class LocalService extends Binder { // Binder implementerar IBinder
+    public class LocalBinder extends Binder {
         public ServerService getService() {
-            return ServerService.this; // referens till Service-klassen
+            // Return this instance of LocalService so clients can call public methods
+            return ServerService.this;
         }
     }
 
@@ -125,8 +103,8 @@ public class ServerService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
-    public void requestAllGroupMembers(String groupName) {
-        Log.i("TO HANDLE", "requestAllGroupMembers()" );
+    public void getGroupMembers(String groupName) {
+        Log.i("TO HANDLE", "getGroupMembers()" );
         StringWriter writer = new StringWriter();
         JsonWriter jWriter = new JsonWriter(writer);
         String result;
@@ -144,8 +122,8 @@ public class ServerService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
-    public void requestAllGroupsList()  {
-        Log.i("TO HANDLE", "requestAllGroupsList()" );
+    public void getGroupsList()  {
+        Log.i("TO HANDLE", "getGroupsList()" );
         StringWriter writer = new StringWriter();
         JsonWriter jWriter = new JsonWriter(writer);
         String result;
@@ -161,9 +139,8 @@ public class ServerService extends Service {
         mMainLoopHandler.sendMessage(msg);
     }
 
-    // TODO: diffeent ids for different goups!
     public void sendPosition(String myId, String longitude, String latitude) {
-        Log.i("TO HANDLE", "sendPosition(()" );
+        Log.d(TAG, "sendPosition(()" );
         StringWriter writer = new StringWriter();
         JsonWriter jWriter = new JsonWriter(writer);
         String result;
@@ -228,7 +205,6 @@ public class ServerService extends Service {
         mMainLoopHandler = handler;
     }
 
-    // TODO: Note: HandlerThread needs to call myHandlerThread.quit() to free the resources and stop the execution of the thread.
     private class MainThread extends HandlerThread {
         private String ip;
         private int port;
@@ -256,10 +232,8 @@ public class ServerService extends Service {
             handler = new Handler(getLooper()) {
                 @Override
                 public void handleMessage(Message msg) {
-                    // process incoming messages here
-                    // this will run in non-ui/background thread
                     String toSend = (String) msg.obj;
-                    Log.i("HANDLER", ": message received");
+                    Log.d(TAG, " HANDLER : message received");
                     try {
                         if (outputStream != null) {
                             outputStream.writeUTF(toSend);
@@ -287,6 +261,7 @@ public class ServerService extends Service {
 
         @Override
         public void run() {
+            Log.d(TAG, "Receiver thread is starting");
             try {
                 inputStream = new DataInputStream(socket.getInputStream());
             } catch (IOException e) {
@@ -296,12 +271,12 @@ public class ServerService extends Service {
             while (socket.isConnected()) {
                 try {
                     String received = inputStream.readUTF();
-                    Log.i("READ UTF: ", "SOMETHING RECEIVED");
+                    Log.i(TAG, "SOMETHING RECEIVED");
                     JSONObject json = new JSONObject(received);
-                    Log.i("IncomingMessageService", json.toString() );
+                    Log.i(TAG, json.toString() );
                     String type = json.getString(JSON_TYPE);
 
-                    Log.i("IncomingMessage TYPE", type);
+                    Log.i(TAG, type);
 
                     switch (type) {
                         case Config.REPLY_REGISTER:
@@ -374,6 +349,13 @@ public class ServerService extends Service {
                             Log.i("GROUPS REPLY: ", groups.toString());
                             break;
 
+                        case Config.REPLY_LOCATION:
+
+                            // reacting to it only not to get IOException
+                            Log.d(TAG, "My locations has been registered, how nice");
+
+                            break;
+
                         case Config.UPDATE_LOCATIONS:
 
                             String groupNameLocations = json.getString("group");
@@ -406,19 +388,20 @@ public class ServerService extends Service {
                             intentError.putExtra(Config.EXCEPTION_MSG, exception);
                             broadcaster.sendBroadcast(intentError);
 
-                            Log.i("SERVICE-SERVER ERROR: ", exception);
+                            Log.i(TAG, "SERVICE ERROR: " + exception);
 
                             break;
                         case Config.UPDATE_TEXTCHAT:
 
-                            String memberGroup = json.getString(Config.GROUP);
-                            String memberName = json.getString(Config.MEMBER);
-
-                            if (memberGroup == null || memberName == null) {
+                            if (!json.has(Config.GROUP) || !json.has(Config.MEMBER)) {
                                 // means it's my own message that I just sent and I don't need to deal with at all
                                 // I will receive it as a message to the chat anyway
+                                // Results in System.err if not checked.
                                 break;
                             }
+
+                            String memberGroup = json.getString(Config.GROUP);
+                            String memberName = json.getString(Config.MEMBER);
 
                             String messageText = json.getString(Config.TEXT);
 
@@ -462,28 +445,34 @@ public class ServerService extends Service {
                     }
                 } catch (JSONException e) {
                     e.printStackTrace();
-                    Log.i("INPUT STREAM PROBLEM: ", e.toString());
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    Log.d(TAG, e.toString());
+                } catch (IOException  exc) {
+                    if (exc instanceof EOFException) {
+                        try {
+                            inputStream.close();
+                            socket.close();
+                            broadcaster = null;
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+
+                        // means the server has closed the socket bc the app hasn't been sending location to groups for a while
+                        // and this service can peacefully die. R.I.P.
+                        wrapItUp();
+                    }
                 }
             }
         }
     }
 
+    public void wrapItUp() {
+        this.stopSelf();
+    }
 
     @Override
     public void onDestroy() {
-//        The system invokes this method when the service is no longer used and is being destroyed. Your service should implement
-//        this to clean up any resources such as threads, registered listeners, or receivers. This is the last call that the service
-//        receives.;
-        // TODO: fix closing sockets,, this one is null
-        if (mSocket != null) {
-            try {
-                mSocket.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        Log.d(TAG, "ON DESTROY");
+        mMainThread.quit();
         super.onDestroy();
     }
 }

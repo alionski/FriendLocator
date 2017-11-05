@@ -4,14 +4,11 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.util.Log;
-
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
-
-import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.beans.ImageMessage;
 
 /**
@@ -24,7 +21,6 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
     private ImageMessage msg;
 
     public Downloader(DownloadListener listener, ImageMessage msg, String imageId, String port) {
-        Log.d(TAG, "DOWNLOADER STARTED");
         this.listener = listener;
         this.msg = msg;
         execute(port, imageId);
@@ -32,14 +28,13 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
 
     @Override
     protected Bitmap doInBackground(String... params) {
-        Log.d(TAG, "TRYING TO DOWNLOAD");
         Bitmap result = null;
         ObjectInputStream input = null;
         ObjectOutputStream output = null;
         byte[] downloadArray;
         Socket socket = null;
         try {
-            socket = new Socket(MainActivity.IP, Integer.valueOf(params[0]));
+            socket = new Socket(ServerService.IP, Integer.valueOf(params[0]));
             input = new ObjectInputStream(socket.getInputStream());
             output= new ObjectOutputStream(socket.getOutputStream());
 
@@ -73,12 +68,6 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
         Log.d(TAG, "MESSAGE RECEIVED " + msg.getImage().getByteCount());
         listener.imageDownloaded(msg);
     }
-
-    @Override
-    protected void onPreExecute() {}
-
-    @Override
-    protected void onProgressUpdate(Void... values) {}
 
     public interface DownloadListener {
         void imageDownloaded(ImageMessage msg);

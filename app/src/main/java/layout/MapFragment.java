@@ -11,7 +11,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
@@ -19,11 +18,8 @@ import com.google.android.gms.maps.MapsInitializer;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-
 import java.util.ArrayList;
-
 import aliona.mah.se.friendlocator.R;
 import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.interfaces.MapFragmentCallback;
@@ -57,8 +53,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         return frag;
     }
 
-    public void setGroup(Group group) {
-        mGroup = group;
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putParcelable(GROUP, mGroup);
+        super.onSaveInstanceState(outState);
     }
 
     @Override
@@ -67,6 +65,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         Bundle args = getArguments();
         if (args != null) {
             mGroup = args.getParcelable(GROUP);
+        }
+        if (savedInstanceState != null) {
+            mGroup = savedInstanceState.getParcelable(GROUP);
         }
     }
 
@@ -111,7 +112,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     public void updateLocations() {
-        addMarkers();
+        if (mMap != null) {
+            addMarkers();
+        }
     }
 
     /**
@@ -125,12 +128,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
-        mMap = googleMap;
         Log.i(TAG, "MAP IS READY");
-
+        mMap = googleMap;
         addSelf();
-
-        Log.i(TAG, "ABOUT TO ADD MARKERS");
         addMarkers();
 
     }
@@ -152,29 +152,24 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     private void addMarkers() {
 
-        if (mMap == null) {
-            return;
-        }
-
         mMap.clear();
 
         mMyPositon = callback.requestLocationUpdate();
         members = callback.requestMembersUpdate(mGroup.getGroupName());
-
-        Log.d(TAG, "ADDING MARKERS " + mMyPositon.toString());
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(mMyPositon));
-        mMap.getUiSettings().setZoomControlsEnabled(true);
-        mMap.getUiSettings().setCompassEnabled(true);
-        mMap.animateCamera(CameraUpdateFactory.zoomTo(8.0f)); // should be between min = 2.0 and max = 21.0
 
         if (members == null || members.size() == 0) {
             Log.d(TAG, "LOCATIONS ARE NULL OR EMPTY");
             return;
         }
 
+        if (mMyPositon != null) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(mMyPositon));
+        }
+        mMap.getUiSettings().setZoomControlsEnabled(true);
+        mMap.getUiSettings().setCompassEnabled(true);
+        mMap.animateCamera(CameraUpdateFactory.zoomTo(8.0f)); // should be between min = 2.0 and max = 21.0
+
         for (Member member : members) {
-            Log.d(TAG, "ADDING TO MAP");
-            Log.d(TAG, member.getMemberName() + " " + member.getLongitude());
             double longitude, latitude;
 
             if (member.getLatitude() == null || member.getLongitude() == null) {
@@ -191,15 +186,12 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
             LatLng memberPosition = new LatLng(latitude, longitude);
 
-            Marker marker = mMap.addMarker( new MarkerOptions()
+            mMap.addMarker( new MarkerOptions()
                     .position(memberPosition)
                     .title(member.getMemberName())
                     .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
-                    .snippet("Group:" + mGroup.getGroupName()
+                    .snippet("Group: " + mGroup.getGroupName()
             ));
-
-            Log.d(TAG, "ADD TO MAP SUCCESS");
-            marker.showInfoWindow();
         }
     }
 

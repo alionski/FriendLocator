@@ -21,5 +21,4 @@ public class FriendLocatorApplication extends Application {
         LeakCanary.install(this);
         // Normal app init code...
     }
-
 }

@@ -73,17 +73,20 @@ public class MainActivity extends AppCompatActivity implements
         Downloader.DownloadListener {
 
     public static final String TAG = MainActivity.class.getName();
-    public static final String SAVED_GROUPS = "saved_groups_ids";
+    public static final String SAVED_GROUPS = "saved_groups";
+    public static final String SAVED_MEMBERS = "saved_members";
+    public static final String SAVED_MESSAGES = "saved_messages";
+    public static final String SAVED_PHOTO = "saved_photo";
+    public static final String SAVED_URI = "photo_uri";
 
+    public static final String GROUPS_TAG = "groups_fragment";
+    public static final String CHAT_TAG = "chat_fragment";
+    public static final String MAP_TAG = "map_fragment";
 
     public static final int GROUPS_ID = 0;
     public static final int CHAT_ID = 1;
     public static final int MAP_ID = 2;
     private static int CURRENT_FRAGMENT;
-
-    public static final String GROUPS_TAG = "groups_fragment";
-    public static final String CHAT_TAG = "chat_fragment";
-    public static final String MAP_TAG = "map_fragment";
 
     static final int REQUEST_IMAGE_CAPTURE = 7776;
     static final int PERMISSIONS_REQUEST_ACCESS_LOCATION = 7777;
@@ -91,8 +94,6 @@ public class MainActivity extends AppCompatActivity implements
 
     private IncomingServiceConnection mServiceConnection;
     private ServerService mService;
-    public final static String IP = "195.178.227.53";
-    public final static int PORT = 7117;
 
     private BroadcastReceiver mMessageReceiver;
     private LocalBroadcastManager mListener;
@@ -108,12 +109,6 @@ public class MainActivity extends AppCompatActivity implements
     private Uri mPictureUri;
 
     private String mUsername;
-
-    private void restoreInstanceState(Bundle savedInstanceState) {
-        // TODO: check casts?
-        mGroups = (HashMap<String, Group>) savedInstanceState.getSerializable(SAVED_GROUPS);
-
-    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,17 +128,27 @@ public class MainActivity extends AppCompatActivity implements
         mUsername = sharedPref.getString(getString(R.string.username), defaultValue);
 
         Intent intent = new Intent(this, ServerService.class);
-        intent.putExtra(ServerService.IP, IP);
-        intent.putExtra(ServerService.PORT, PORT);
         startService(intent);
 
         createBroadcastReceiver();
 
         if (mGoogleApiClient == null) {
             mGoogleApiClient = new GoogleApiClient.Builder(this)
+                    .enableAutoManage(this, null)
                     .addConnectionCallbacks(this)
                     .addApi(LocationServices.API)
                     .build();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void restoreInstanceState(Bundle savedInstanceState) {
+        mGroups = (HashMap<String, Group>) savedInstanceState.getSerializable(SAVED_GROUPS);
+        mMessages = (HashMap<String, ArrayList<Parcelable>>) savedInstanceState.getSerializable(SAVED_MESSAGES);
+        mMembers = (HashMap<String, ArrayList<Member>>) savedInstanceState.getSerializable(SAVED_MEMBERS);
+        mPictureUri = savedInstanceState.getParcelable(SAVED_URI);
+        if (savedInstanceState.getByteArray(SAVED_PHOTO) != null) {
+            mImageToDispatch = BitmapResiser.fromBytesToBitmap(savedInstanceState.getByteArray(SAVED_PHOTO));
         }
     }
 
@@ -179,7 +184,7 @@ public class MainActivity extends AppCompatActivity implements
             case GROUPS_ID:
 
                 if (mService != null) {
-                    mService.requestAllGroupsList();
+                    mService.getGroupsList();
                 }
 
                 GroupsFragment groups = (GroupsFragment) fm.findFragmentByTag(GROUPS_TAG);
@@ -207,19 +212,14 @@ public class MainActivity extends AppCompatActivity implements
                         .replace(R.id.fragment_main_holder, chat, CHAT_TAG)
                         .addToBackStack(null)
                         .commit();
-
-                setTitle(R.string.tab_chat);
                 break;
 
             case MAP_ID:
                 MapFragment map = (MapFragment) fm.findFragmentByTag(MAP_TAG);
 
                 if (map == null) {
-                    map = new MapFragment();
+                    map = MapFragment.newInstance(group);
                 }
-
-                // TODO: or shall I do with show/hide
-                map.setGroup(group);
 
                 fm.beginTransaction()
                         .replace(R.id.fragment_main_holder, map, MAP_TAG)
@@ -284,7 +284,7 @@ public class MainActivity extends AppCompatActivity implements
         SharedPreferences sharedPref = getPreferences(Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPref.edit();
         editor.putString(getString(R.string.username), name);
-        editor.commit();
+        editor.apply();
 
         mUsername = name;
     }
@@ -300,21 +300,19 @@ public class MainActivity extends AppCompatActivity implements
         return true;
     }
 
+    @Override
+    public void onBackPressed() {
+        FragmentManager fm = getSupportFragmentManager();
+        if (fm.getBackStackEntryCount() > 0) {
+            CURRENT_FRAGMENT = GROUPS_ID;
+            setTitle(R.string.app_name);
+            fm.popBackStack();
+        } else {
+            super.onBackPressed();
+        }
+    }
 
-
-
-
-
-
-
-
-    ///////////////////////////////////// INTERFACES METHODS
-
-
-
-
-
-
+    ///////////////////////////////////// INTERFACES METHODS /////////////////////////////////////////////////////////////
 
 
     @Override
@@ -338,13 +336,8 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     @Override
-    public ArrayList requestUpdateGroups() {
-        Log.d(TAG, "requestUpdateGroups()" + mGroups.values().toArray( new Group[mGroups.size()]).length);
-        debugPrintMap();
-
-        ArrayList<Group> gr = new ArrayList<Group>(mGroups.values());
-        Log.d(TAG, "ARE GROUPS NULL? " + mGroups.size());
-        return gr;
+    public ArrayList<Group> requestUpdateGroups() {
+        return new ArrayList<Group>(mGroups.values());
     }
 
     @Override
@@ -360,9 +353,7 @@ public class MainActivity extends AppCompatActivity implements
     @Override
     public LatLng requestLocationUpdate() {
         if (mLastLocation != null) {
-            LatLng loc = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
-            Log.d(TAG, loc.toString());
-            return loc;
+            return new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
         }
         return null;
     }
@@ -406,6 +397,10 @@ public class MainActivity extends AppCompatActivity implements
             String pathToPicture = mPictureUri.getPath();
             mImageToDispatch = BitmapResiser.getScaled(pathToPicture,
                     300, 300);
+            ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(CHAT_TAG);
+            if (frag != null) {
+                frag.notifyPhotoIsReady();
+            }
         }
     }
 
@@ -416,24 +411,7 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     public ArrayList<Parcelable> requestReadMessages(String groupName) {
-        if (mMessages != null && mMessages.get(groupName) != null) {
-            Log.d(TAG, "SIZE IN MAIN" + mMessages.get(groupName).size());
-        }
         return mMessages.get(groupName);
-    }
-
-    /////////////////////////////// ADAPTER SPECIFIC
-
-    @Override
-    public void onBackPressed() {
-        if (CURRENT_FRAGMENT == CHAT_ID) {
-            CURRENT_FRAGMENT = GROUPS_ID;
-            mService.requestAllGroupsList();
-        } else if (CURRENT_FRAGMENT == MAP_ID) {
-            CURRENT_FRAGMENT = GROUPS_ID;
-            mService.requestAllGroupsList();
-        }
-        super.onBackPressed();
     }
 
     @Override
@@ -441,7 +419,7 @@ public class MainActivity extends AppCompatActivity implements
         receiveMessage(msg.getGroup(), msg);
     }
 
-    // SERVICE SPECIFIC //////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////// SERVICE SPECIFIC ///////////////////////////////////////////////////////////////////
 
     private void createBroadcastReceiver() {
         mMessageReceiver = new BroadcastReceiver() {
@@ -466,10 +444,8 @@ public class MainActivity extends AppCompatActivity implements
                         }
                         mGroups.get(groupName).setMyGroupId(groupId);
 
-                        mService.requestAllGroupsList();
-                        mService.requestAllGroupMembers(groupName);
+                        mService.getGroupsList();
 
-                        Log.i(TAG, "REGISTERED TO NEW GROUP " + groupName + groupId);
                         break;
 
                     case Config.REPLY_UNREGISTER:
@@ -495,9 +471,8 @@ public class MainActivity extends AppCompatActivity implements
                             }
                         }
 
-                        mService.requestAllGroupsList();
+                        mService.getGroupsList();
 
-                        Log.i(TAG, "UNREGISTERED FROM " + groupToLeave + " WITH ID " + idToDelete);
                         break;
 
                     case Config.REPLY_MEMBERS:
@@ -527,11 +502,10 @@ public class MainActivity extends AppCompatActivity implements
                         mMembers.put(groupName2, newMembers);
 
                         updateGroupsUI();
+
                         break;
 
                     case Config.REPLY_GROUPS:
-
-                        Log.i(TAG, "GROUPS UPDATE RECEIVED");
 
                         ArrayList<Group> groups = intent.getParcelableArrayListExtra(Config.GROUPS_ARRAY);
                         HashMap<String, Group> tempMap = new HashMap<>();
@@ -559,13 +533,11 @@ public class MainActivity extends AppCompatActivity implements
                         }
 
                         for (Group group : mGroups.values()) {
-                            mService.requestAllGroupMembers(group.getGroupName());
+                            mService.getGroupMembers(group.getGroupName());
                         }
-
                         break;
 
                     case Config.UPDATE_LOCATIONS:
-                        Log.d(TAG, "RECEIVED LOCATIONS  ");
 
                         String locGroupName = intent.getStringExtra(Config.GROUP);
                         ArrayList<Member> memberLocations = intent.getParcelableArrayListExtra(Config.GROUP_LOCATIONS);
@@ -577,15 +549,16 @@ public class MainActivity extends AppCompatActivity implements
                             frag.updateLocations();
                         }
 
-                        Log.d(TAG, "UPDATED LOCATIONS");
+                        mService.getGroupsList();
+
                         break;
 
                     case Config.UPDATE_EXCEPTION:
 
                         String error = intent.getStringExtra(Config.EXCEPTION_MSG);
                         Toast.makeText(getApplicationContext(), error, Toast.LENGTH_SHORT).show();
-
                         break;
+
                     case Config.UPDATE_IMAGECHAT:
 
                         ImageMessage imgMsg = intent.getParcelableExtra(Config.IMG_OBJECT);
@@ -593,7 +566,6 @@ public class MainActivity extends AppCompatActivity implements
                         String port = intent.getStringExtra(Config.IMG_PORT);
 
                         startDownload(imgMsg, id, port);
-
                         break;
 
                     case Config.UPDATE_TEXTCHAT:
@@ -602,8 +574,8 @@ public class MainActivity extends AppCompatActivity implements
                         String textGroupName = ((TextMessage)msg).getGroup();
 
                         receiveMessage(textGroupName, msg);
-
                         break;
+
                     case Config.REPLY_UPLOAD:
 
                         String imageId = intent.getStringExtra(Config.IMG_ID);
@@ -611,12 +583,9 @@ public class MainActivity extends AppCompatActivity implements
                         new Uploader(imageId, portUp, mImageToDispatch);
                         mImageToDispatch = null;
                         mPictureUri = null;
-
                         break;
                 }
-
-                debugPrintMap();
-
+//                debugPrintMap();
             }
         };
     }
@@ -666,7 +635,6 @@ public class MainActivity extends AppCompatActivity implements
 
         mListener.registerReceiver(
                 mMessageReceiver, filter);
-
     }
 
     private void unregisterBroadcastListeners() {
@@ -675,63 +643,21 @@ public class MainActivity extends AppCompatActivity implements
 
     private class IncomingServiceConnection implements ServiceConnection {
         public void onServiceConnected(ComponentName arg0, IBinder binder) {
-            ServerService.LocalService ls = (ServerService.LocalService) binder;
+            ServerService.LocalBinder ls = (ServerService.LocalBinder) binder;
             mService = ls.getService();
-            mService.requestAllGroupsList();
 
+            mService.getGroupsList();
         }
 
         @Override
         public void onServiceDisconnected(ComponentName componentName) {
-
+            String cryingFace = new String(Character.toChars(0x1F622));
+            Toast.makeText(getApplicationContext(), cryingFace + cryingFace + cryingFace
+                    + "\n" + getResources().getString(R.string.disconnection_notice), Toast.LENGTH_LONG).show();
         }
     }
 
-    private Group[] getGroupsAsArray() {
-        return mGroups.values().toArray( new Group[mGroups.size()]);
-    }
-
-    @Override
-    public void onPause() {
-        super.onPause();
-        unregisterBroadcastListeners();
-        unbindService(mServiceConnection);
-        stopLocationUpdates();
-    }
-
-    @Override
-    protected void onStop() {
-        mGoogleApiClient.disconnect();
-        Log.i(TAG, "GoogleApiClient in disconnected");
-        super.onStop();
-    }
-
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
-        // TODO: stop service here, starting onCreate
-        Intent intent = new Intent(MainActivity.this, ServerService.class);
-        stopService(intent);
-    }
-
-    private void debugPrintMap() {
-        Iterator it = mGroups.entrySet().iterator();
-        while (it.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) it.next();
-            Log.d(TAG, "+++++++++++++++++++++++++++++ DEBUG PRINT MAP ++++++++++++++++++++++++++++++");
-            Log.d(TAG, "HASH MAP KEY: " + pair.getKey());
-            Group group = (Group) pair.getValue();
-            Log.d(TAG, "---GROUP NAME: " + group.getGroupName());
-            Log.d(TAG, "---GROUP JOINED: " + (group.getMyGroupId() == null ? "not joined" : group.getMyGroupId()));
-            Log.d(TAG, "---GROUP MY ID: " + group.getMyGroupId());
-//            Log.d(TAG, "---GROUP MEMBER COUNT: " +
-//                    mMembers.get(group.getGroupName()) == null ? "null" :
-//                    "" + mMembers.get(group.getGroupName()).size());
-        }
-    }
-
-    ///////// LOCATION SPECIFIC
+    /////////////////////////////////// LOCATION SPECIFIC ////////////////////////////////////////////////////
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
@@ -748,25 +674,17 @@ public class MainActivity extends AppCompatActivity implements
         mLastLocation = LocationServices.FusedLocationApi.getLastLocation(
                 mGoogleApiClient);
 
-//        Log.i(TAG, "LAST LOCATION: " + mLastLocation.toString());
-
-        if (mLastLocation != null) {
-
-            if (!mGroups.isEmpty()) {
-                for (Group group : mGroups.values()) {
-
-                    if (group.getMyGroupId() != null) {
-                        mService.sendPosition(
-                                group.getMyGroupId(),
-                                String.valueOf(mLastLocation.getLongitude()),
-                                String.valueOf(mLastLocation.getLatitude()));
-                    }
+        if (mLastLocation != null && mService != null && !mGroups.isEmpty()) {
+            for (Group group : mGroups.values()) {
+                if (group.getMyGroupId() != null) {
+                    mService.sendPosition(
+                            group.getMyGroupId(),
+                            String.valueOf(mLastLocation.getLongitude()),
+                            String.valueOf(mLastLocation.getLatitude()));
                 }
             }
         }
-
         checkLocationSettings();
-
     }
 
     @Override
@@ -865,9 +783,8 @@ public class MainActivity extends AppCompatActivity implements
         Log.i(TAG,  "LOCATION CHANGED: " + location.toString());
         mLastLocation = location;
 
-        Group[] groups = getGroupsAsArray();
-        if (groups.length != 0) {
-            for (Group group : groups) {
+        if (!mGroups.isEmpty() && mService != null) {
+            for (Group group : mGroups.values()) {
                 if (group.getMyGroupId() != null) {
                     mService.sendPosition(
                             group.getMyGroupId(),
@@ -876,11 +793,70 @@ public class MainActivity extends AppCompatActivity implements
                 }
             }
         }
-
     }
 
+    @SuppressWarnings("Deprecated")
     protected void stopLocationUpdates() {
-        LocationServices.FusedLocationApi.removeLocationUpdates(
-                mGoogleApiClient, this);
+        if (mGoogleApiClient.isConnected()) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(
+                    mGoogleApiClient, this);
+        }
+    }
+
+    @Override
+    public void onPause() {
+        unregisterBroadcastListeners();
+        unbindService(mServiceConnection);
+        // going in the background will cause the app to lose the service
+        stopLocationUpdates();
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        if (mGoogleApiClient != null && mGoogleApiClient.isConnected()) {
+            mGoogleApiClient.disconnect();
+        }
+        Log.i(TAG, "GoogleApiClient in disconnected");
+        super.onStop();
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putSerializable(SAVED_GROUPS, mGroups);
+        outState.putSerializable(SAVED_MESSAGES, mMessages);
+        outState.putSerializable(SAVED_MEMBERS, mMembers);
+        outState.putParcelable(SAVED_URI, mPictureUri);
+        if (mImageToDispatch != null) {
+            outState.putByteArray(SAVED_PHOTO, BitmapResiser.fromBitmapToBytes(mImageToDispatch));
+        }
+        super.onSaveInstanceState(outState);
+    }
+
+    /**
+     * GoogleApiClient keeps leaking the activity. No easy solution present as it's a bug on Google's side.
+     * https://github.com/googlesamples/android-play-location/issues/26
+     */
+
+    @Override
+    public void onDestroy() {
+        if (mGoogleApiClient != null) {
+            mGoogleApiClient.unregisterConnectionCallbacks(this);
+            mGoogleApiClient = null;
+        }
+        super.onDestroy();
+    }
+
+    private void debugPrintMap() {
+        Iterator it = mGroups.entrySet().iterator();
+        while (it.hasNext()) {
+            HashMap.Entry pair = (HashMap.Entry) it.next();
+            Log.d(TAG, "+++++++++++++++++++++++++++++ DEBUG PRINT MAP ++++++++++++++++++++++++++++++");
+            Log.d(TAG, "HASH MAP KEY: " + pair.getKey());
+            Group group = (Group) pair.getValue();
+            Log.d(TAG, "---GROUP NAME: " + group.getGroupName());
+            Log.d(TAG, "---GROUP JOINED: " + (group.getMyGroupId() == null ? "not joined" : group.getMyGroupId()));
+            Log.d(TAG, "---GROUP MY ID: " + group.getMyGroupId());
+        }
     }
 }

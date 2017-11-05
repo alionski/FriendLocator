@@ -28,7 +28,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:layout_margin="8dp"
-        android:background="@drawable/rounded_corner_orange">
+        android:background="@drawable/chat_rounded_corner_orange">
 
         <EditText
             android:id="@+id/et_enter_chat_text"

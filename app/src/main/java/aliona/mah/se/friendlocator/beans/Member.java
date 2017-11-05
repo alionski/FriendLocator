@@ -2,12 +2,13 @@ package aliona.mah.se.friendlocator.beans;
 
 import android.os.Parcel;
 import android.os.Parcelable;
+import java.io.Serializable;
 
 /**
  * Created by aliona on 2017-10-30.
  */
 
-public class Member implements Parcelable {
+public class Member implements Parcelable, Serializable {
     private String memberName;
     private String longitude;
     private String latitude;

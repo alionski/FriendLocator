@@ -1,6 +1,5 @@
 package layout;
 
-
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Parcelable;
@@ -18,9 +17,8 @@ import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
-
+import android.widget.Toast;
 import java.util.ArrayList;
-
 import aliona.mah.se.friendlocator.R;
 import aliona.mah.se.friendlocator.interfaces.ChatListCallback;
 import aliona.mah.se.friendlocator.beans.Group;
@@ -35,6 +33,8 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
 
     private static final String USERNAME = "username";
     private static final String GROUP = "group";
+    private static final String IS_IMAGE_MESSAGE = "is_img_message";
+    private static final String MESSAGE_TEXT = "message_text";
 
     private Group mGroup;
     private String mMyName;
@@ -48,8 +48,7 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
     private ImageButton mButtonSend;
     private ImageButton mButtonAttachPic;
     private EditText mEnterTextField;
-
-    private boolean imgMessage = false;
+    private boolean isImgMessage = false;
 
     public ChatFragment() {  }
 
@@ -63,6 +62,16 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
     }
 
     @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(IS_IMAGE_MESSAGE, isImgMessage);
+        outState.putParcelable(GROUP, mGroup);
+        if (mEnterTextField != null) {
+            outState.putString(MESSAGE_TEXT, mEnterTextField.getText().toString());
+        }
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Bundle args = getArguments();
@@ -70,6 +79,16 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
             mMyName = args.getString(USERNAME);
             mGroup = args.getParcelable(GROUP);
         }
+        if (savedInstanceState != null) {
+            isImgMessage = savedInstanceState.getBoolean(IS_IMAGE_MESSAGE);
+            mGroup = savedInstanceState.getParcelable(GROUP);
+            if (mEnterTextField != null) {
+                mEnterTextField.setText(savedInstanceState.getString(MESSAGE_TEXT));
+            }
+        }
+
+        getActivity().setTitle(getResources().getString(R.string.tab_chat) + ": " + mGroup.getGroupName());
+
     }
 
     @Override
@@ -81,6 +100,8 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
 
         return view;
     }
+
+
 
     @Override
     public void onAttach(Context context) {
@@ -104,6 +125,9 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
 
         mButtonSend = view.findViewById(R.id.button_send_message);
         mButtonSend.setOnClickListener(this);
+
+        mBubblesAdapter = new BubblesAdapter(getContext(), R.id.list_view_chat_bubbles, mReadMessages);
+        mChatBubblesList.setAdapter(mBubblesAdapter);
     }
 
     @Override
@@ -113,20 +137,24 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
         updateBubblesAdapter();
     }
 
+    public void updateBubblesAdapter() {
+        ArrayList<Parcelable> updatedMessages = mParent.requestReadMessages(mGroup.getGroupName());
+
+        if (updatedMessages != null) {
+            mBubblesAdapter.clear();
+            mReadMessages.clear();
+            mReadMessages.addAll(updatedMessages);
+            mBubblesAdapter.notifyDataSetChanged();
+        }
+    }
+
     public String getCurrentGroup() {
         return mGroup.getGroupName();
     }
 
-    public void updateBubblesAdapter() {
-        ArrayList<Parcelable> updatedMessages = mParent.requestReadMessages(mGroup.getGroupName());
-
-        if(updatedMessages != null && updatedMessages.size() != 0) {
-            mChatBubblesList.setAdapter(null);
-            mBubblesAdapter = new BubblesAdapter(getContext(), R.id.list_view_chat_bubbles, updatedMessages);
-            mChatBubblesList.setAdapter(mBubblesAdapter);
-        } else {
-            mChatBubblesList.setAdapter(null);
-        }
+    public void notifyPhotoIsReady() {
+        Toast.makeText(getContext(), getResources().getString(R.string.photo_ready) + " "
+                        + new String(Character.toChars(0x1F44C)), Toast.LENGTH_SHORT).show();
     }
 
     private class BubblesAdapter extends ArrayAdapter<Parcelable> {
@@ -155,9 +183,9 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
                 text.setText(((TextMessage) message).getText());
 
                 if (!((TextMessage) message).getFrom().equals(mMyName)) {
-                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_blue));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.chat_rounded_corner_blue));
                 } else {
-                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_orange));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.chat_rounded_corner_orange));
                 }
 
             } else if (message instanceof ImageMessage) {
@@ -173,9 +201,9 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
                 text.setText(((ImageMessage) message).getText());
 
                 if (!((ImageMessage) message).getFrom().equals(mMyName)) {
-                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_blue));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.chat_rounded_corner_blue));
                 } else {
-                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.rounded_corner_orange));
+                    convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.chat_rounded_corner_orange));
                 }
 
                 image.setImageBitmap(((ImageMessage) message).getImage());
@@ -194,7 +222,7 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
         if (view == mButtonAttachPic) {
 
             mParent.startImgUpload();
-            imgMessage = true;
+            isImgMessage = true;
 
         } else if (view == mButtonSend) {
 
@@ -204,10 +232,10 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
                 return;
             }
 
-            if (imgMessage) {
+            if (isImgMessage) {
                 if (mParent.imgIsReady()) {
                     mParent.onSendImageMessage(mGroup.getMyGroupId(), text);
-                    imgMessage = false;
+                    isImgMessage = false;
                 }
             } else {
                 mParent.onSendTextMessage(mGroup.getMyGroupId(), text);

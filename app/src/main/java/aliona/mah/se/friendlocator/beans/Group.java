@@ -2,7 +2,6 @@ package aliona.mah.se.friendlocator.beans;
 
 import android.os.Parcel;
 import android.os.Parcelable;
-
 import java.io.Serializable;
 
 

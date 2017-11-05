@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -14,26 +15,6 @@ import java.util.Date;
  */
 
 public class BitmapResiser {
-    /**
-     * reduces the size of the image
-     * @param image
-     * @param maxSize
-     * @return
-     */
-    public static Bitmap getResizedBitmap(Bitmap image, int maxSize) {
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        float bitmapRatio = (float)width / (float) height;
-        if (bitmapRatio > 1) {
-            width = maxSize;
-            height = (int) (width / bitmapRatio);
-        } else {
-            height = maxSize;
-            width = (int) (height * bitmapRatio);
-        }
-        return Bitmap.createScaledBitmap(image, width, height, true);
-    }
 
     public static Bitmap getScaled(String pathToPicture, int targetW, int targetH) {
         // Get the dimensions of the bitmap
@@ -61,5 +42,15 @@ public class BitmapResiser {
         File dir = Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_PICTURES);
         return Uri.fromFile(new File(dir, imageFileName));
+    }
+
+    public static byte[] fromBitmapToBytes(Bitmap toConvert) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        toConvert.compress(Bitmap.CompressFormat.JPEG, 100, stream);
+        return stream.toByteArray();
+    }
+
+    public static Bitmap fromBytesToBitmap(byte[] toConvert) {
+        return BitmapFactory.decodeByteArray(toConvert, 0, toConvert.length);
     }
 }

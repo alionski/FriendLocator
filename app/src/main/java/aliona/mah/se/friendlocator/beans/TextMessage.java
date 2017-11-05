@@ -7,7 +7,7 @@ import android.os.Parcelable;
  * Created by aliona on 2017-10-31.
  */
 
-public class TextMessage implements Parcelable{
+public class TextMessage implements Parcelable {
     private String group;
     private String from;
     private String text;

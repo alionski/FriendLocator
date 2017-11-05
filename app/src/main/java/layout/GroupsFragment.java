@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -15,12 +14,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.ToggleButton;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -39,7 +36,8 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     private FloatingActionButton mButtonNewGroup;
 
     private GroupsFragmentCallback mParent;
-//    private ArrayList<Group> mGroups = new ArrayList<>();
+    private ArrayList<Group> mGroups = new ArrayList<>();
+    private HashMap<String, ArrayList<Member>> mMembers = new HashMap<>();
 
     public GroupsFragment() {
         // Required empty public constructor
@@ -54,6 +52,9 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
         mListView = view.findViewById(R.id.groups_list_view);
         mButtonNewGroup = view.findViewById(R.id.groups_add_group);
         mButtonNewGroup.setOnClickListener(this);
+
+        mGroupsAdapter = new GroupsAdapter(getContext(), R.layout.list_view_item_groups, mGroups, mMembers);
+        mListView.setAdapter(mGroupsAdapter);
 
         return view;
     }
@@ -75,14 +76,17 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     }
 
     public void updateGroupsList() {
+        if (mParent != null) {
+            ArrayList<Group> updatedGroups = mParent.requestUpdateGroups();
+            HashMap<String, ArrayList<Member>> members = mParent.getMembers();
 
-        ArrayList<Group> updatedGroups = mParent.requestUpdateGroups();
-        HashMap<String, ArrayList<Member>> members = mParent.getMembers();
-
-        mListView.invalidateViews();
-        mListView.setAdapter(null);
-        mGroupsAdapter = new GroupsAdapter(getContext(), R.layout.list_view_item_groups, updatedGroups, members);
-        mListView.setAdapter(mGroupsAdapter);
+            mGroupsAdapter.clear();
+            mGroups.clear();
+            mGroups.addAll(updatedGroups);
+            mMembers.clear();
+            mMembers.putAll(members);
+            mGroupsAdapter.notifyDataSetChanged();
+        }
     }
 
     @Override
@@ -137,11 +141,11 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
             if (joined) {
                 buttonJoin.setText(getResources().getString(R.string.groups_button_leave));
                 buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorAccent));
-                convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPaleOrange));
+                convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.groups_rounded_corner_joined));
             } else {
                 buttonJoin.setText(getResources().getString(R.string.groups_button_join));
                 buttonJoin.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimaryDark));
-                convertView.setBackgroundColor(ContextCompat.getColor(getContext(), R.color.colorPrimary));
+                convertView.setBackground(ContextCompat.getDrawable(getContext(), R.drawable.groups_rounded_corner_not_joined));
             }
 
             if (joined) {
