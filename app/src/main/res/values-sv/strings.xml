@@ -29,7 +29,7 @@
     <string name="change_name_text">Du kan ändra ditt namn här</string>
     <string name="change_name_done">Ändra namn</string>
 
-    <string name="group_label">Grupp</string>
+    <string name="group_label">Grupp: </string>
 
     <!--MainActivity-->
     <string name="disconnection_notice">\"Did you get your disconnection notice? Mine came in the mail todaaaay.

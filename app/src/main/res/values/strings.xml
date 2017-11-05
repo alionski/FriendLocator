@@ -30,7 +30,7 @@
     <string name="change_name_text">You can change your name here</string>
     <string name="change_name_done">Change name</string>
 
-    <string name="group_label">Group</string>
+    <string name="group_label">Group: </string>
 
 
     <!--MainActivity-->

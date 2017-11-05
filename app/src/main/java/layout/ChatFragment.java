@@ -19,6 +19,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.util.ArrayList;
+
+import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.R;
 import aliona.mah.se.friendlocator.interfaces.ChatListCallback;
 import aliona.mah.se.friendlocator.beans.Group;
@@ -85,9 +87,6 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
                 mEnterTextField.setText(savedInstanceState.getString(MESSAGE_TEXT));
             }
         }
-
-        getActivity().setTitle(getResources().getString(R.string.tab_chat) + ": " + mGroup.getGroupName());
-
     }
 
     @Override
@@ -131,9 +130,12 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
     @Override
     public void onResume() {
         Log.d(TAG, "ON RESUME" );
-        super.onResume();
+
+        MainActivity.CURRENT_FRAGMENT = MainActivity.CHAT_ID;
+        getActivity().setTitle(getResources().getString(R.string.tab_chat) + ": " + mGroup.getGroupName());
 
         updateBubblesAdapter();
+        super.onResume();
     }
 
     /**

@@ -98,7 +98,8 @@ public class MainActivity extends AppCompatActivity implements
     public static final int GROUPS_ID = 0;
     public static final int CHAT_ID = 1;
     public static final int MAP_ID = 2;
-    private static int CURRENT_FRAGMENT;
+    public static int CURRENT_FRAGMENT;
+    private static String CURRENT_FRAGMENT_TAG;
 
     static final int REQUEST_IMAGE_CAPTURE = 7776;
     static final int PERMISSIONS_REQUEST_ACCESS_LOCATION = 7777;
@@ -190,7 +191,6 @@ public class MainActivity extends AppCompatActivity implements
 
     private void setFragment(int idNumber, Group group) {
         FragmentManager fm = getSupportFragmentManager();
-        CURRENT_FRAGMENT = idNumber;
 
         switch(idNumber) {
             case GROUPS_ID:
@@ -208,8 +208,6 @@ public class MainActivity extends AppCompatActivity implements
                 fm.beginTransaction()
                         .replace(R.id.fragment_main_holder, groups, GROUPS_TAG)
                         .commit();
-
-                setTitle(R.string.app_name);
                 break;
 
             case CHAT_ID:
@@ -219,10 +217,15 @@ public class MainActivity extends AppCompatActivity implements
                     chat = ChatFragment.newInstance(mUsername, group);
                 }
 
-                fm.beginTransaction()
+                FragmentTransaction trans = fm.beginTransaction()
                         .setCustomAnimations(android.R.animator.fade_in, android.R.animator.fade_out)
-                        .replace(R.id.fragment_main_holder, chat, CHAT_TAG)
-                        .commit();
+                        .replace(R.id.fragment_main_holder, chat, CHAT_TAG);
+
+                if (CURRENT_FRAGMENT == GROUPS_ID) {
+                    trans.addToBackStack(null);
+                }
+                trans.commit();
+
                 break;
 
             case MAP_ID:
@@ -232,11 +235,14 @@ public class MainActivity extends AppCompatActivity implements
                     map = MapFragment.newInstance(group);
                 }
 
-                fm.beginTransaction()
-                        .replace(R.id.fragment_main_holder, map, MAP_TAG)
-                        .commit();
+                FragmentTransaction trans2 = fm.beginTransaction()
+                        .replace(R.id.fragment_main_holder, map, MAP_TAG);
 
-                setTitle(R.string.tab_map);
+                if (CURRENT_FRAGMENT == GROUPS_ID) {
+                    trans2.addToBackStack(null);
+                }
+                trans2.commit();
+
                 break;
         }
     }
@@ -310,16 +316,6 @@ public class MainActivity extends AppCompatActivity implements
         return true;
     }
 
-    @Override
-    public void onBackPressed() {
-        if (CURRENT_FRAGMENT == CHAT_ID || CURRENT_FRAGMENT == MAP_ID) {
-            CURRENT_FRAGMENT = GROUPS_ID;
-            setFragment(GROUPS_ID, null);
-        } else {
-            super.onBackPressed();
-        }
-    }
-
     /***********************************************************************************************
      *
      * Interface methods
@@ -328,7 +324,7 @@ public class MainActivity extends AppCompatActivity implements
 
 
     @Override
-    public void registerInGroup(String groupName, boolean isJoined) {
+    public void notifyGroupJoinStatusChanged(String groupName, boolean isJoined) {
         Group group = mGroups.get(groupName);
         if (!isJoined) {
             mService.requestUnregister(group.getMyGroupId());
@@ -852,6 +848,7 @@ public class MainActivity extends AppCompatActivity implements
     /**
      * GoogleApiClient keeps leaking the activity. No easy solution present as it's a bug on Google's side.
      * https://github.com/googlesamples/android-play-location/issues/26
+     *
      */
 
     @Override

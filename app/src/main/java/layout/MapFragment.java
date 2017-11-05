@@ -21,6 +21,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import java.util.ArrayList;
+
+import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.R;
 import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.interfaces.MapFragmentCallback;
@@ -100,6 +102,10 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onResume() {
         Log.d(TAG, "ON RESUME");
         super.onResume();
+
+        MainActivity.CURRENT_FRAGMENT = MainActivity.MAP_ID;
+        getActivity().setTitle(R.string.tab_map);
+
         mMapView.onResume();
         try {
             MapsInitializer.initialize(getActivity().getApplicationContext());
@@ -197,7 +203,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                     .position(memberPosition)
                     .title(member.getMemberName())
                     .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
-                    .snippet(getResources().getString(R.string.group_label) + mGroup.getGroupName()
+                    .snippet(getResources().getString(R.string.group_label) + " " + mGroup.getGroupName()
             ));
         }
     }
@@ -225,6 +231,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "ON PAUSE");
         super.onPause();
         mMapView.onPause();
+    }
+
+    @Override
+    public void onDetach() {
+        Log.d(TAG, "ON DETACH");
+        super.onDetach();
+        mParent = null;
     }
 
     @Override

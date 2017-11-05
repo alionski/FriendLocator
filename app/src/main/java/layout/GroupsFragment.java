@@ -21,6 +21,8 @@ import android.widget.ListView;
 import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.HashMap;
+
+import aliona.mah.se.friendlocator.MainActivity;
 import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.interfaces.GroupsFragmentCallback;
 import aliona.mah.se.friendlocator.beans.Group;
@@ -72,7 +74,12 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     @Override
     public void onResume() {
         Log.d(TAG, "ON RESUME");
+
+        MainActivity.CURRENT_FRAGMENT = MainActivity.GROUPS_ID;
+        getActivity().setTitle(R.string.app_name);
+
         updateGroupsList();
+
         super.onResume();
     }
 
@@ -133,7 +140,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
                 @Override
                 public void onClick(View view) {
                     int pos = (Integer) view.getTag();
-                    mParent.registerInGroup(getItem(pos).getGroupName(),
+                    mParent.notifyGroupJoinStatusChanged(getItem(pos).getGroupName(),
                             getItem(pos).getMyGroupId() == null);
                 }
             });
@@ -227,7 +234,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
                             public void onClick(DialogInterface dialogInterface, int i) {
                                 String name = enterName.getText().toString();
                                 if (!name.equals("")) {
-                                    mParent.registerInGroup(enterName.getText().toString(), true);
+                                    mParent.notifyGroupJoinStatusChanged(enterName.getText().toString(), true);
                                 }
                                 dialogInterface.dismiss();
                             }
@@ -247,6 +254,13 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     public void onPause() {
         Log.d(TAG, "ON PAUSE");
         super.onPause();
+    }
+
+    @Override
+    public void onDetach() {
+        Log.d(TAG, "ON DETACH");
+        super.onDetach();
+        mParent = null;
     }
 
     @Override

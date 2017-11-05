@@ -12,7 +12,7 @@ import aliona.mah.se.friendlocator.beans.Member;
  */
 
 public interface GroupsFragmentCallback {
-    void registerInGroup(String groupName, boolean isJoined);
+    void notifyGroupJoinStatusChanged(String groupName, boolean isJoined);
     void showChat(String groupName);
     ArrayList<Group> requestUpdateGroups();
     void showMap(String groupName);
