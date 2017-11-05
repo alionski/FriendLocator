@@ -5,6 +5,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -26,6 +27,8 @@ import aliona.mah.se.friendlocator.interfaces.MapFragmentCallback;
 import aliona.mah.se.friendlocator.beans.Group;
 
 /**
+ * MapFragment which shows members' positions on the map.
+ * Can show only one group at once and is constantly updated with arriving location updates from the server.
  * A simple {@link Fragment} subclass.
  */
 public class MapFragment extends Fragment implements OnMapReadyCallback {
@@ -36,9 +39,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     private MapView mMapView;
     private GoogleMap mMap;
     private Group mGroup;
-    private ArrayList<Member> members;
-    private LatLng mMyPositon;
-    private MapFragmentCallback callback;
+    private MapFragmentCallback mParent;
 
 
     public MapFragment() {
@@ -66,6 +67,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         if (args != null) {
             mGroup = args.getParcelable(GROUP);
         }
+        // if args are null, it means we are restoring after rotation and our group is there
         if (savedInstanceState != null) {
             mGroup = savedInstanceState.getParcelable(GROUP);
         }
@@ -79,18 +81,8 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "ON CREATE VIEW");
 
         View view = inflater.inflate(R.layout.fragment_map, container, false);
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-
-        // TODO: call with fragment manager and remove when the fragment is destroyed
         mMapView = view.findViewById(R.id.mapView);
         mMapView.onCreate(savedInstanceState);
-        mMapView.onResume(); // needed to get the map to display immediately
-        try {
-            MapsInitializer.initialize(getActivity().getApplicationContext());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        mMapView.getMapAsync(this);
 
         return view;
     }
@@ -100,7 +92,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "ON ATTACH");
         super.onAttach(context);
         if (context instanceof MapFragmentCallback) {
-            callback = (MapFragmentCallback) context;
+            mParent = (MapFragmentCallback) context;
         }
     }
 
@@ -109,8 +101,17 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         Log.d(TAG, "ON RESUME");
         super.onResume();
         mMapView.onResume();
+        try {
+            MapsInitializer.initialize(getActivity().getApplicationContext());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        mMapView.getMapAsync(this);
     }
 
+    /**
+     * Method called by MainActivity to update markers.
+     */
     public void updateLocations() {
         if (mMap != null) {
             addMarkers();
@@ -119,7 +120,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     /**
      * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
+     * This mParent is triggered when the map is ready to be used.
      * This is where we can add markers or lines, add listeners or move the camera. In this case,
      * we just add a marker near Sydney, Australia.
      * If Google Play services is not installed on the device, the user will be prompted to install
@@ -135,6 +136,9 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
 
     }
 
+    /**
+     * Positions the user on the map.
+     */
     private void addSelf() {
         if (ActivityCompat.checkSelfPermission(this.getContext(),
                 Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
@@ -150,20 +154,23 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    /**
+     * Cleans the map and adds users to the map
+     */
     private void addMarkers() {
 
         mMap.clear();
 
-        mMyPositon = callback.requestLocationUpdate();
-        members = callback.requestMembersUpdate(mGroup.getGroupName());
+        LatLng myPosition = mParent.requestLocationUpdate();
+        ArrayList<Member> members = mParent.requestMembersUpdate(mGroup.getGroupName());
 
         if (members == null || members.size() == 0) {
             Log.d(TAG, "LOCATIONS ARE NULL OR EMPTY");
             return;
         }
 
-        if (mMyPositon != null) {
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(mMyPositon));
+        if (myPosition != null) {
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(myPosition));
         }
         mMap.getUiSettings().setZoomControlsEnabled(true);
         mMap.getUiSettings().setCompassEnabled(true);
@@ -190,7 +197,7 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
                     .position(memberPosition)
                     .title(member.getMemberName())
                     .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_person_pin_circle_black_48dp))
-                    .snippet("Group: " + mGroup.getGroupName()
+                    .snippet(getResources().getString(R.string.group_label) + mGroup.getGroupName()
             ));
         }
     }
@@ -202,18 +209,13 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
      * @param grantResults -- the results, i.e. user's decision
      */
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                                           int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull  String[] permissions,
+                                           @NonNull int[] grantResults) {
         switch (requestCode) {
             case MY_PERMISSIONS_REQUEST_GPS: {
                 // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0
-                        && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    mPermissionGranted = true;
-                } else {
-                    mPermissionGranted = false;
-                }
-                return;
+                mPermissionGranted =  (grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED);
             }
         }
     }
@@ -222,9 +224,6 @@ public class MapFragment extends Fragment implements OnMapReadyCallback {
     public void onPause() {
         Log.d(TAG, "ON PAUSE");
         super.onPause();
-        if (mMap != null) {
-            mMap.clear();
-        }
         mMapView.onPause();
     }
 

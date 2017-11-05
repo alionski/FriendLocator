@@ -1,6 +1,9 @@
 package aliona.mah.se.friendlocator.util;
 
 /**
+ * A class that is not even a real class but a list of static strings to be used when sending and receiving
+ * broadcasts from the service to main activity. Having them here reduces the number of declarations in resepctive classed
+ * and makes it all cleaner.
  * Created by aliona on 2017-10-30.
  */
 

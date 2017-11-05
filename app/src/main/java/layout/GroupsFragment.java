@@ -3,6 +3,7 @@ package layout;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.Fragment;
 import android.support.v4.content.ContextCompat;
@@ -20,18 +21,18 @@ import android.widget.ListView;
 import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.HashMap;
-
 import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.interfaces.GroupsFragmentCallback;
 import aliona.mah.se.friendlocator.beans.Group;
 import aliona.mah.se.friendlocator.R;
 
 /**
+ * Fragment that is first loaded upon app launch. Shows all available groups on the server and
+ * displays which the user has joined or not.
  * A simple {@link Fragment} subclass.
  */
 public class GroupsFragment extends Fragment implements View.OnClickListener {
     public static final String TAG = GroupsFragment.class.getName();
-    private ListView mListView;
     private ArrayAdapter mGroupsAdapter;
     private FloatingActionButton mButtonNewGroup;
 
@@ -49,12 +50,12 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
                              Bundle savedInstanceState) {
         Log.d(TAG, "ON CREATE VIEW");
         View view = inflater.inflate(R.layout.fragment_groups, container, false);
-        mListView = view.findViewById(R.id.groups_list_view);
         mButtonNewGroup = view.findViewById(R.id.groups_add_group);
         mButtonNewGroup.setOnClickListener(this);
 
+        ListView listView = view.findViewById(R.id.groups_list_view);
         mGroupsAdapter = new GroupsAdapter(getContext(), R.layout.list_view_item_groups, mGroups, mMembers);
-        mListView.setAdapter(mGroupsAdapter);
+        listView.setAdapter(mGroupsAdapter);
 
         return view;
     }
@@ -75,6 +76,9 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
         super.onResume();
     }
 
+    /**
+     * Called by MainActivity if the fragment is visible to updte the groups list.
+     */
     public void updateGroupsList() {
         if (mParent != null) {
             ArrayList<Group> updatedGroups = mParent.requestUpdateGroups();
@@ -97,30 +101,28 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     }
 
     private class GroupsAdapter extends ArrayAdapter<Group> {
-        private final String TAG = GroupsAdapter.class.getName();
         HashMap<String, ArrayList<Member>> members;
 
-        public GroupsAdapter(Context context, int resource, ArrayList<Group> items,
+        private GroupsAdapter(Context context, int resource, ArrayList<Group> items,
                              HashMap<String, ArrayList<Member>> members) {
             super(context, resource, items);
             this.members = members;
-            Log.d(TAG, "ON CREATE GROUPS ADAPTER");
         }
 
+        @NonNull
         @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
+        public View getView(int position, View convertView, @NonNull ViewGroup parent) {
 
             if (convertView == null) {
                 LayoutInflater vi;
                 vi = LayoutInflater.from(getContext());
-                convertView = vi.inflate(R.layout.list_view_item_groups, null);
+                convertView = vi.inflate(R.layout.list_view_item_groups, parent, false);
             }
 
             Group group = getItem(position);
-            Log.d(TAG, "LOADING GROUP INFO: \n" + group.getGroupName() + "\n" + group.getMyGroupId() + "\n");
-
 
             convertView.setTag(position);
+
             boolean joined = group.getMyGroupId() != null;
 
             TextView groupName = convertView.findViewById(R.id.groups_text_view_group_name);
@@ -131,7 +133,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
                 @Override
                 public void onClick(View view) {
                     int pos = (Integer) view.getTag();
-                    mParent.notifyJoinedStatusChanged(getItem(pos).getGroupName(),
+                    mParent.registerInGroup(getItem(pos).getGroupName(),
                             getItem(pos).getMyGroupId() == null);
                 }
             });
@@ -177,12 +179,13 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
             }
 
             if (members.get(group.getGroupName()) != null) {
+
                 TextView memberView = convertView.findViewById(R.id.members_names);
+
                 StringBuilder builder = new StringBuilder();
                 ArrayList<Member> names = members.get(getItem(position).getGroupName());
                 builder.append(getResources().getString(R.string.group_members)).append(" ");
                 for (int i = 0; i < names.size(); i++) {
-                    Log.d(TAG, "GROUP MEMBER: " + names.get(i).getMemberName());
                     builder.append(names.get(i).getMemberName());
                     if (i == names.size()-1) {
                         break;
@@ -196,6 +199,9 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
         }
     }
 
+    /**
+     * Called when the user clicks the floating action button.
+     */
     private void addNewGroup() {
 
         final EditText enterName = new EditText(getContext());
@@ -208,7 +214,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
         dialogBuilder
                 .setTitle(R.string.add_new_group)
                 .setView(enterName)
-                .setNegativeButton("Cancel",
+                .setNegativeButton(R.string.cancel_option,
                     new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialogInterface, int i) {
@@ -221,7 +227,7 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
                             public void onClick(DialogInterface dialogInterface, int i) {
                                 String name = enterName.getText().toString();
                                 if (!name.equals("")) {
-                                    mParent.startNewGroup(enterName.getText().toString());
+                                    mParent.registerInGroup(enterName.getText().toString(), true);
                                 }
                                 dialogInterface.dismiss();
                             }
@@ -247,11 +253,5 @@ public class GroupsFragment extends Fragment implements View.OnClickListener {
     public void onDestroy() {
         Log.d(TAG, "ON DESTROY");
         super.onDestroy();
-    }
-
-    @Override
-    public void onLowMemory() {
-        Log.d(TAG, "ON LOW MEMORY");
-        super.onLowMemory();
     }
 }

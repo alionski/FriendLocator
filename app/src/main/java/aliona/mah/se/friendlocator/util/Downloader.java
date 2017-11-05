@@ -8,15 +8,16 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import aliona.mah.se.friendlocator.beans.ImageMessage;
 
 /**
+ * AsyncTask that downloads an image that has arrived from the server and returns it to MainActivity, to be
+ * stored in messages and passed to ChatFragment, if it's active
  * Created by aliona on 2017-11-02.
  */
 
 public class Downloader extends AsyncTask<String, Void, Bitmap> {
-    public static String TAG = Downloader.class.getName();
+    private static String TAG = Downloader.class.getName();
     private DownloadListener listener;
     private ImageMessage msg;
 
@@ -43,12 +44,7 @@ public class Downloader extends AsyncTask<String, Void, Bitmap> {
             downloadArray = (byte[])input.readObject();
             result = BitmapFactory.decodeByteArray(downloadArray, 0, downloadArray.length);
 
-        return result;
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (ClassNotFoundException e) {
+        } catch (IOException | ClassNotFoundException e) {
             e.printStackTrace();
         } finally {
             try {

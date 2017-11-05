@@ -18,9 +18,11 @@ import android.net.Uri;
 import android.os.IBinder;
 import android.os.Parcelable;
 import android.provider.MediaStore;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.content.LocalBroadcastManager;
 import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
@@ -42,14 +44,12 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
-import com.google.android.gms.location.LocationSettingsStates;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.google.android.gms.maps.model.LatLng;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import aliona.mah.se.friendlocator.beans.Group;
-import aliona.mah.se.friendlocator.util.BitmapResiser;
+import aliona.mah.se.friendlocator.util.BitmapHelper;
 import aliona.mah.se.friendlocator.interfaces.ChatListCallback;
 import aliona.mah.se.friendlocator.util.Config;
 import aliona.mah.se.friendlocator.util.Downloader;
@@ -63,6 +63,18 @@ import aliona.mah.se.friendlocator.beans.TextMessage;
 import layout.ChatFragment;
 import layout.GroupsFragment;
 import layout.MapFragment;
+
+
+/**
+ *
+ * MainActivity, which is the controller for the fragments as well.
+ * It starts the service if it's not started, binds to it, and controls the locations, as well as
+ * accepts broadcasts from the sevice and manages them.
+ * Keeps all the groups/members/messages data.
+ * Locations updates are stopped in onPause. This app would require to do it in onDestroy,
+ * but I did it as it would be done otherwise in apps, where the ids are not tied to the locations updated an server sockets.
+ *
+ */
 
 public class MainActivity extends AppCompatActivity implements
         GoogleApiClient.ConnectionCallbacks,
@@ -148,7 +160,7 @@ public class MainActivity extends AppCompatActivity implements
         mMembers = (HashMap<String, ArrayList<Member>>) savedInstanceState.getSerializable(SAVED_MEMBERS);
         mPictureUri = savedInstanceState.getParcelable(SAVED_URI);
         if (savedInstanceState.getByteArray(SAVED_PHOTO) != null) {
-            mImageToDispatch = BitmapResiser.fromBytesToBitmap(savedInstanceState.getByteArray(SAVED_PHOTO));
+            mImageToDispatch = BitmapHelper.fromBytesToBitmap(savedInstanceState.getByteArray(SAVED_PHOTO));
         }
     }
 
@@ -210,7 +222,6 @@ public class MainActivity extends AppCompatActivity implements
                 fm.beginTransaction()
                         .setCustomAnimations(android.R.animator.fade_in, android.R.animator.fade_out)
                         .replace(R.id.fragment_main_holder, chat, CHAT_TAG)
-                        .addToBackStack(null)
                         .commit();
                 break;
 
@@ -223,7 +234,6 @@ public class MainActivity extends AppCompatActivity implements
 
                 fm.beginTransaction()
                         .replace(R.id.fragment_main_holder, map, MAP_TAG)
-                        .addToBackStack(null)
                         .commit();
 
                 setTitle(R.string.tab_map);
@@ -257,7 +267,7 @@ public class MainActivity extends AppCompatActivity implements
         dialogBuilder
                 .setTitle(R.string.change_name_text)
                 .setView(enterName)
-                .setNegativeButton("Cancel",
+                .setNegativeButton(R.string.cancel_option,
                         new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int i) {
@@ -302,21 +312,23 @@ public class MainActivity extends AppCompatActivity implements
 
     @Override
     public void onBackPressed() {
-        FragmentManager fm = getSupportFragmentManager();
-        if (fm.getBackStackEntryCount() > 0) {
+        if (CURRENT_FRAGMENT == CHAT_ID || CURRENT_FRAGMENT == MAP_ID) {
             CURRENT_FRAGMENT = GROUPS_ID;
-            setTitle(R.string.app_name);
-            fm.popBackStack();
+            setFragment(GROUPS_ID, null);
         } else {
             super.onBackPressed();
         }
     }
 
-    ///////////////////////////////////// INTERFACES METHODS /////////////////////////////////////////////////////////////
+    /***********************************************************************************************
+     *
+     * Interface methods
+     *
+     ***********************************************************************************************/
 
 
     @Override
-    public void notifyJoinedStatusChanged(String groupName, boolean isJoined) {
+    public void registerInGroup(String groupName, boolean isJoined) {
         Group group = mGroups.get(groupName);
         if (!isJoined) {
             mService.requestUnregister(group.getMyGroupId());
@@ -326,18 +338,13 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     @Override
-    public void startNewGroup(String groupName) {
-        mService.requestRegister(groupName, getUsername());
-    }
-
-    @Override
     public void showChat(String groupName) {
         setFragment(CHAT_ID, mGroups.get(groupName));
     }
 
     @Override
     public ArrayList<Group> requestUpdateGroups() {
-        return new ArrayList<Group>(mGroups.values());
+        return new ArrayList<>(mGroups.values());
     }
 
     @Override
@@ -383,7 +390,7 @@ public class MainActivity extends AppCompatActivity implements
     @Override
     public void startImgUpload() {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        mPictureUri = BitmapResiser.generateURI();
+        mPictureUri = BitmapHelper.generateURI();
         takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, mPictureUri);
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
@@ -395,8 +402,7 @@ public class MainActivity extends AppCompatActivity implements
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
             String pathToPicture = mPictureUri.getPath();
-            mImageToDispatch = BitmapResiser.getScaled(pathToPicture,
-                    300, 300);
+            mImageToDispatch = BitmapHelper.getScaled(pathToPicture);
             ChatFragment frag = (ChatFragment) getSupportFragmentManager().findFragmentByTag(CHAT_TAG);
             if (frag != null) {
                 frag.notifyPhotoIsReady();
@@ -419,7 +425,11 @@ public class MainActivity extends AppCompatActivity implements
         receiveMessage(msg.getGroup(), msg);
     }
 
-    /////////////////////////////////////////////// SERVICE SPECIFIC ///////////////////////////////////////////////////////////////////
+    /************************************************************************************************
+     *
+     * Service-specific methods
+     *
+     ***********************************************************************************************/
 
     private void createBroadcastReceiver() {
         mMessageReceiver = new BroadcastReceiver() {
@@ -585,7 +595,6 @@ public class MainActivity extends AppCompatActivity implements
                         mPictureUri = null;
                         break;
                 }
-//                debugPrintMap();
             }
         };
     }
@@ -657,7 +666,11 @@ public class MainActivity extends AppCompatActivity implements
         }
     }
 
-    /////////////////////////////////// LOCATION SPECIFIC ////////////////////////////////////////////////////
+    /***********************************************************************************************
+     *
+     * Location-specific methods
+     *
+     ***********************************************************************************************/
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
@@ -688,7 +701,8 @@ public class MainActivity extends AppCompatActivity implements
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions,int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
         switch(requestCode) {
             case PERMISSIONS_REQUEST_ACCESS_LOCATION:
                 // If request is cancelled, the result arrays are empty.
@@ -698,8 +712,8 @@ public class MainActivity extends AppCompatActivity implements
                     checkLocationSettings();
 
                 } else {
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
+                    // closing the app since the user can't use it without location
+                    finish();
                 }
 
                 return;
@@ -711,11 +725,10 @@ public class MainActivity extends AppCompatActivity implements
                     startLocationUpdates();
 
                 } else {
-                    // permission denied, boo! Disable the
-                    // functionality that depends on this permission.
+                    // closing the app since the user can't use it without location
+                    finish();
                 }
 
-                return;
         }
 
     }
@@ -734,9 +747,8 @@ public class MainActivity extends AppCompatActivity implements
                         builder.build());
         result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
             @Override
-            public void onResult(LocationSettingsResult result) {
+            public void onResult(@NonNull LocationSettingsResult result) {
                 final Status status = result.getStatus();
-                final LocationSettingsStates states = result.getLocationSettingsStates();
                 switch (status.getStatusCode()) {
                     case LocationSettingsStatusCodes.SUCCESS:
 
@@ -803,11 +815,15 @@ public class MainActivity extends AppCompatActivity implements
         }
     }
 
+    /**
+     * Going in the background will cause the app to lose the service if the user is absent too long.
+     * In this case it would be better to cancel location updates, but whatever. Did it as it would be
+     * done in regular applications with stable servers.
+     */
     @Override
     public void onPause() {
         unregisterBroadcastListeners();
         unbindService(mServiceConnection);
-        // going in the background will cause the app to lose the service
         stopLocationUpdates();
         super.onPause();
     }
@@ -828,7 +844,7 @@ public class MainActivity extends AppCompatActivity implements
         outState.putSerializable(SAVED_MEMBERS, mMembers);
         outState.putParcelable(SAVED_URI, mPictureUri);
         if (mImageToDispatch != null) {
-            outState.putByteArray(SAVED_PHOTO, BitmapResiser.fromBitmapToBytes(mImageToDispatch));
+            outState.putByteArray(SAVED_PHOTO, BitmapHelper.fromBitmapToBytes(mImageToDispatch));
         }
         super.onSaveInstanceState(outState);
     }
@@ -845,18 +861,5 @@ public class MainActivity extends AppCompatActivity implements
             mGoogleApiClient = null;
         }
         super.onDestroy();
-    }
-
-    private void debugPrintMap() {
-        Iterator it = mGroups.entrySet().iterator();
-        while (it.hasNext()) {
-            HashMap.Entry pair = (HashMap.Entry) it.next();
-            Log.d(TAG, "+++++++++++++++++++++++++++++ DEBUG PRINT MAP ++++++++++++++++++++++++++++++");
-            Log.d(TAG, "HASH MAP KEY: " + pair.getKey());
-            Group group = (Group) pair.getValue();
-            Log.d(TAG, "---GROUP NAME: " + group.getGroupName());
-            Log.d(TAG, "---GROUP JOINED: " + (group.getMyGroupId() == null ? "not joined" : group.getMyGroupId()));
-            Log.d(TAG, "---GROUP MY ID: " + group.getMyGroupId());
-        }
     }
 }

@@ -19,6 +19,8 @@
     <string name="group_members">Members: </string>
     <string name="button_chat_description">Start chatting</string>
     <string name="button_map_description">See group members on map</string>
+    <string name="chat_image_description">Picture from chat user</string>
+    <string name="cancel_option">Cancel</string>
 
     <!--ChatFragment-->
 
@@ -28,7 +30,10 @@
     <string name="change_name_text">You can change your name here</string>
     <string name="change_name_done">Change name</string>
 
-    <!--ServerService-->
+    <string name="group_label">Group</string>
+
+
+    <!--MainActivity-->
     <string name="disconnection_notice">\"Did you get your disconnection notice? Mine came in the mail todaaaay.
         They seem to think I\'m disconnected. Don\'t think I know what to reaaaad or wriiiite or saaaay.
         Glossaries injected daily. Words and numbers spell out the price to paaaay.

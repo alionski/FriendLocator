@@ -3,13 +3,13 @@ package aliona.mah.se.friendlocator.util;
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.util.Log;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 /**
+ * AsyncTask that uploads user's picture to the server once the id and port are available
  * Created by aliona on 2017-11-02.
  */
 
@@ -38,7 +38,6 @@ public class Uploader extends AsyncTask<String, Void, Void> {
             Log.d("UPLOADER ARRAY SIZE", "" + byteArray.length);
             output.flush();
             socket.close();
-            Log.d("UPLOADER", "DONE UPLOADING");
         } catch (IOException e) {
             e.printStackTrace();
         }

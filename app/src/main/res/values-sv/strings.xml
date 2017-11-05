@@ -1,4 +1,5 @@
 <resources>
+
     <string name="service_description">Service för TCP/IP kommunikation i FriendLocator</string>
     <string name="app_name">FriendLocator</string>
     <string name="default_username">Anonym</string>
@@ -17,6 +18,8 @@
     <string name="group_members">Medlemmar: </string>
     <string name="button_chat_description">Börja chatta</string>
     <string name="button_map_description">See medlemmarna på kartan</string>
+    <string name="chat_image_description">Bild from chattmedlem</string>
+    <string name="cancel_option">Ångra</string>
 
     <!--ChatFragment-->
 
@@ -26,7 +29,9 @@
     <string name="change_name_text">Du kan ändra ditt namn här</string>
     <string name="change_name_done">Ändra namn</string>
 
-    <!--ServerService-->
+    <string name="group_label">Grupp</string>
+
+    <!--MainActivity-->
     <string name="disconnection_notice">\"Did you get your disconnection notice? Mine came in the mail todaaaay.
         They seem to think I\'m disconnected. Don\'t think I know what to reaaaad or wriiiite or saaaay.
         Glossaries injected daily. Words and numbers spell out the price to paaaay.

@@ -6,14 +6,13 @@ import java.io.Serializable;
 
 
 /**
+ * Bean representing a group.
  * Created by aliona on 2017-10-23.
  */
 
 public class Group implements Parcelable, Serializable {
     private String groupName;
     private String myGroupId;
-
-    public Group() {}
 
     public Group(String groupName) {
         this.groupName = groupName;
@@ -50,10 +49,6 @@ public class Group implements Parcelable, Serializable {
 
     public String getGroupName() {
         return groupName;
-    }
-
-    public void setGroupName(String groupName) {
-        this.groupName = groupName;
     }
 
     public String getMyGroupId() {

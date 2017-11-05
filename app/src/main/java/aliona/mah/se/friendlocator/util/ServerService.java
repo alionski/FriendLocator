@@ -27,6 +27,11 @@ import aliona.mah.se.friendlocator.beans.Member;
 import aliona.mah.se.friendlocator.beans.TextMessage;
 
 /**
+ * Service that is responsible for communication with the server.
+ * It is both started _and_ bound. Started because we want to keep the service alive while the activity is rotating,
+ * and bound because we want to be able to interact with it from MainActivity.
+ * One it gets te first end-of-stream exception, it kills itself (it is only possible if the server has closed the socket,
+ * and this is only possible if we haven't been updating our location for 2 min, which means the app is closed.
  * Created by aliona on 2017-10-22.
  */
 
@@ -212,7 +217,7 @@ public class ServerService extends Service {
         private DataOutputStream outputStream;
         private Handler handler;
 
-        public MainThread(String ip, int port) {
+        private MainThread(String ip, int port) {
             super("MainHandlerThread");
             this.ip = ip;
             this.port = port;
@@ -253,7 +258,7 @@ public class ServerService extends Service {
         DataInputStream inputStream;
         LocalBroadcastManager broadcaster;
 
-        public ReceiverThread(Socket socket) {
+        private ReceiverThread(Socket socket) {
 
             this.socket = socket;
             broadcaster = LocalBroadcastManager.getInstance(getApplicationContext());
@@ -455,7 +460,6 @@ public class ServerService extends Service {
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
-
                         // means the server has closed the socket bc the app hasn't been sending location to groups for a while
                         // and this service can peacefully die. R.I.P.
                         wrapItUp();

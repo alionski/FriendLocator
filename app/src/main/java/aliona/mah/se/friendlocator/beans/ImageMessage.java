@@ -5,6 +5,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 /**
+ * Bean representing an image message.
  * Created by aliona on 2017-11-01.
  */
 
@@ -15,15 +16,8 @@ public class ImageMessage implements Parcelable {
     private String latitude;
     private String longitude;
     private Bitmap image;
-    private boolean read = false;
 
     public ImageMessage() {}
-
-    public ImageMessage(String group, String from, String text) {
-        this.group = group;
-        this.from = from;
-        this.text = text;
-    }
 
     protected ImageMessage(Parcel in) {
         group = in.readString();
@@ -32,7 +26,6 @@ public class ImageMessage implements Parcelable {
         latitude = in.readString();
         longitude = in.readString();
         image = in.readParcelable(Bitmap.class.getClassLoader());
-        read = in.readByte() != 0;
     }
 
     @Override
@@ -43,7 +36,6 @@ public class ImageMessage implements Parcelable {
         dest.writeString(latitude);
         dest.writeString(longitude);
         dest.writeParcelable(image, flags);
-        dest.writeByte((byte) (read ? 1 : 0));
     }
 
     @Override
@@ -111,11 +103,4 @@ public class ImageMessage implements Parcelable {
         this.image = image;
     }
 
-    public boolean isRead() {
-        return read;
-    }
-
-    public void setRead(boolean read) {
-        this.read = read;
-    }
 }

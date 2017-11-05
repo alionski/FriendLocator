@@ -5,6 +5,7 @@ import android.os.Parcelable;
 import java.io.Serializable;
 
 /**
+ * Parcelable and serializable bean representing a group member.
  * Created by aliona on 2017-10-30.
  */
 
@@ -57,23 +58,12 @@ public class Member implements Parcelable, Serializable {
         return memberName;
     }
 
-    public void setMemberName(String memberName) {
-        this.memberName = memberName;
-    }
-
     public String getLongitude() {
         return longitude;
-    }
-
-    public void setLongitude(String longitude) {
-        this.longitude = longitude;
     }
 
     public String getLatitude() {
         return latitude;
     }
 
-    public void setLatitude(String latitude) {
-        this.latitude = latitude;
-    }
 }

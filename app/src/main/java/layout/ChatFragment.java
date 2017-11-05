@@ -26,6 +26,7 @@ import aliona.mah.se.friendlocator.beans.ImageMessage;
 import aliona.mah.se.friendlocator.beans.TextMessage;
 
 /**
+ * Fragment that shows the chat for specific groups.
  * A simple {@link Fragment} subclass.
  */
 public class ChatFragment extends Fragment implements View.OnClickListener {
@@ -39,8 +40,6 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
     private Group mGroup;
     private String mMyName;
     private BubblesAdapter mBubblesAdapter;
-
-    private ListView mChatBubblesList;
     private ChatListCallback mParent;
 
     private ArrayList<Parcelable> mReadMessages = new ArrayList<>();
@@ -116,8 +115,6 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
     }
 
     private void initialiseUI(View view) {
-        mChatBubblesList = view.findViewById(R.id.list_view_chat_bubbles);
-
         mEnterTextField = view.findViewById(R.id.et_enter_chat_text);
 
         mButtonAttachPic = view.findViewById(R.id.button_attach_pic);
@@ -126,17 +123,22 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
         mButtonSend = view.findViewById(R.id.button_send_message);
         mButtonSend.setOnClickListener(this);
 
+        ListView chatBubblesList = view.findViewById(R.id.list_view_chat_bubbles);
         mBubblesAdapter = new BubblesAdapter(getContext(), R.id.list_view_chat_bubbles, mReadMessages);
-        mChatBubblesList.setAdapter(mBubblesAdapter);
+        chatBubblesList.setAdapter(mBubblesAdapter);
     }
 
     @Override
     public void onResume() {
         Log.d(TAG, "ON RESUME" );
         super.onResume();
+
         updateBubblesAdapter();
     }
 
+    /**
+     * Called by the fragment itself and by MainActivity to update messages/deliver new ones.
+     */
     public void updateBubblesAdapter() {
         ArrayList<Parcelable> updatedMessages = mParent.requestReadMessages(mGroup.getGroupName());
 
@@ -148,33 +150,43 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
         }
     }
 
+    /**
+     * Caleld by main activity to check if the message it received is for the groups chat being displayed.
+     * @return
+     */
     public String getCurrentGroup() {
         return mGroup.getGroupName();
     }
 
+    /**
+     * Called by MainActivity to let the user know that the photo just taken has been successfully processed and
+     * is ready to be sent.
+     */
     public void notifyPhotoIsReady() {
         Toast.makeText(getContext(), getResources().getString(R.string.photo_ready) + " "
                         + new String(Character.toChars(0x1F44C)), Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * Adapter for the chat itself.
+     */
     private class BubblesAdapter extends ArrayAdapter<Parcelable> {
 
-        public BubblesAdapter(@NonNull Context context, int resource, @NonNull ArrayList<Parcelable> objects) {
+        private BubblesAdapter(@NonNull Context context, int resource, @NonNull ArrayList<Parcelable> objects) {
             super(context, resource, objects);
         }
 
+        @NonNull
         @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            Log.d(TAG, "GOT NEW MESSAGE! ");
+        public View getView(int position, View convertView, @NonNull ViewGroup parent) {
 
             Parcelable message = getItem(position);
             LayoutInflater vi;
             vi = LayoutInflater.from(getContext());
 
             if (message instanceof TextMessage) {
-                Log.d(TAG, "MESSAGE IS TEXT");
 
-                convertView = vi.inflate(R.layout.list_view_item_chat_bubbles, null);
+                convertView = vi.inflate(R.layout.list_view_item_chat_bubbles, parent, false);
 
                 TextView sender = convertView.findViewById(R.id.tv_chat_sender);
                 TextView text = convertView.findViewById(R.id.tv_chat_text);
@@ -189,9 +201,8 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
                 }
 
             } else if (message instanceof ImageMessage) {
-                Log.d(TAG, "MESSAGE IS IMAGE");
 
-                convertView = vi.inflate(R.layout.list_view_item_chat_image_bubble, null);
+                convertView = vi.inflate(R.layout.list_view_item_chat_image_bubble, parent, false);
 
                 TextView sender = convertView.findViewById(R.id.tv_chat_sender_image);
                 TextView text = convertView.findViewById(R.id.tv_chat_text_image);
@@ -208,9 +219,8 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
 
                 image.setImageBitmap(((ImageMessage) message).getImage());
 
-            } else {
-                return null;
             }
+
             return convertView;
         }
 
@@ -271,10 +281,4 @@ public class ChatFragment extends Fragment implements View.OnClickListener {
         Log.d(TAG, "ON DESTROY");
         super.onDestroy();
     }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-    }
-
 }
